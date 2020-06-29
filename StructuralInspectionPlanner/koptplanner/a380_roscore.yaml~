@@ -1,8 +1,0 @@
-#camera parameters
-Inspection_Planner/camera/horizontal: deg(120)
-Inspection_Planner/camera/vertical: deg(120)
-Inspection_Planner/camera/pitch: deg(25)
-
-#rotorcraft parameters
-Inspection_Planner/rotorcraft/maxSpeed: 0.25
-Inspection_Planner/rotorcraft/maxAngularSpeed: 0.5
