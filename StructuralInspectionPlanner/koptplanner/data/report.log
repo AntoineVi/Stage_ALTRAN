@@ -6,7 +6,7 @@ Space center:		(0, 0, 0)
 Space size:		(1000, 1000, 1000)
 Starting point:		(0, 0, 100)
 Angle of incidence:	0.523599rad
-Range:			(5, 500)m
+Range:			(1, 500)m
 Number of iterations:	20
 Linear speed:		0.25m/s
 Yaw rate:		0.5rad/s
@@ -94,6 +94,7 @@ Camera pitch:		0.436332rad
 ====== Starting Iteration  19 ======
 ====================================
 -->Infeasible connection between viewpoints
-(0, 0, 100) and (14.0036, -1.47959, 230.087)
--->Infeasible connection between viewpoints
-(0, 0, 100) and (-86.5504, 108.524, -21.0403)
+(0, 0, 100) and (107.016, 147.984, 20.3252)
+-->Missing parameter. Error ocurred while loading parameters from parameter file 'koptParam.yaml'.
+-->Missing parameter. Error ocurred while loading parameters from parameter file 'koptParam.yaml'.
+-->Missing parameter. Error ocurred while loading parameters from parameter file 'koptParam.yaml'.

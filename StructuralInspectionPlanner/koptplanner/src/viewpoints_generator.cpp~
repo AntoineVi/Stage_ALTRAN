@@ -188,7 +188,14 @@ void publishlatestPath() {
 			stateVP[0] = poseTmp.pose.position.x;
 			stateVP[1] = poseTmp.pose.position.y;
 			stateVP[2] = poseTmp.pose.position.z;
+			
+#if DIMENSIONALITY>4
+			stateVP[3] = std::atof(poseStr[3].c_str());
+			stateVP[4] = std::atof(poseStr[4].c_str());
+			stateVP[5] = std::atof(poseStr[5].c_str());
+#else
 			stateVP[3] = std::atof(poseStr[5].c_str());
+#endif		
 			publishViewpoint(stateVP, id);
 						
 			id++;
@@ -569,8 +576,16 @@ bool viewpointsGenerator(koptplanner::inspection::Request  &req, koptplanner::in
 		file << std::to_string(itFixedPoses->position.x)+"\t";
 		file << std::to_string(itFixedPoses->position.y)+"\t";
 		file << std::to_string(itFixedPoses->position.z)+"\t";
+#if DIMENSIONALITY>4
+		tf::Quaternion q(itFixedPoses->orientation.x, itFixedPoses->orientation.y, itFixedPoses->orientation.z, itFixedPoses->orientation.w);
+		double roll, pitch, yaw;
+		tf::Matrix3x3(q).getRPY(roll, pitch, yaw);
+		file << std::to_string(roll)+"\t";
+		file << std::to_string(pitch)+"\t";
+#else
 		file << std::to_string(0.0)+"\t";
 		file << std::to_string(0.0)+"\t";
+#endif		
 		file << std::to_string(tf::getYaw(pose.getRotation()))+"\n";
 		file.close();
 	}
@@ -744,9 +759,17 @@ bool viewpointsGenerator(koptplanner::inspection::Request  &req, koptplanner::in
 				file << std::to_string(gVect[j][0])+"\t";
 				file << std::to_string(gVect[j][1])+"\t";
 				file << std::to_string(gVect[j][2])+"\t";
+				
+#if DIMENSIONALITY>4
+				file << std::to_string(gVect[j][3])+"\t";
+				file << std::to_string(gVect[j][4])+"\t";
+				file << std::to_string(gVect[j][5])+"\n";
+#else
 				file << std::to_string(0.0)+"\t";
 				file << std::to_string(0.0)+"\t";
 				file << std::to_string(gVect[j][3])+"\n";
+#endif
+				
 
 // If orientation saved as Quaternion
 /*
@@ -819,8 +842,14 @@ void viewpointReaderFile(int VP_id) {
 			VPtmp[0] = std::atof(pose[0].c_str());
 			VPtmp[1] = std::atof(pose[1].c_str());
 			VPtmp[2] = std::atof(pose[2].c_str());
+
+#if DIMENSIONALITY>4
+			VPtmp[3] = std::atof(pose[3].c_str());
+			VPtmp[4] = std::atof(pose[4].c_str());
+			VPtmp[5] = std::atof(pose[5].c_str());
+#else
 			VPtmp[3] = std::atof(pose[5].c_str());
-									
+#endif
 			VP_OK = inClickedObstacle(VPtmp);
 		}
 		file.close();

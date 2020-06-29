@@ -1,7 +1,7 @@
-length=[-1.48735e+08, 1593184024776;
+length=[49262, 639;
 ];
-timeEval = 2832;
-timeLKH = 2788;
+timeEval = 2818;
+timeLKH = 2321;
 timeRRTs = 0;
 timeDistEval = 32;
 timeDBS = 0;
