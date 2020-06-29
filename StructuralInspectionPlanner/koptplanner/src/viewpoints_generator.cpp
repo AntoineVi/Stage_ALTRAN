@@ -136,7 +136,7 @@ int main(int argc, char **argv)
 	stl_pub = n.advertise<nav_msgs::Path>("stl_mesh", 1);
 
 	initOK = false;
-	sleep_time = 1000.0;
+	sleep_time = 1500.0;
 	obsBoxSize = 50;
 	pkgPath = ros::package::getPath("koptplanner");
 
@@ -189,6 +189,9 @@ void publishlatestPath() {
 			stateVP[1] = poseTmp.pose.position.y;
 			stateVP[2] = poseTmp.pose.position.z;
 			stateVP[3] = std::atof(poseStr[5].c_str());
+			
+			ROS_INFO("stateVP: x:%f, y:%f, z:%f, yaw:%f", stateVP[0], stateVP[1], stateVP[2], stateVP[3]); 
+			
 			publishViewpoint(stateVP, id);
 						
 			id++;
@@ -830,6 +833,7 @@ void viewpointReaderFile(int VP_id) {
 			VP[VP_id][0] = VPtmp[0];
 			VP[VP_id][1] = VPtmp[1];
 			VP[VP_id][2] = VPtmp[2];
+			VP[VP_id][3] = VPtmp[3];
 			
 			publishViewpoint(VPtmp, VP_id);
 		}

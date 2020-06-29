@@ -98,3 +98,5 @@ Camera pitch:		0.436332rad
 -->Missing parameter. Error ocurred while loading parameters from parameter file 'koptParam.yaml'.
 -->Missing parameter. Error ocurred while loading parameters from parameter file 'koptParam.yaml'.
 -->Missing parameter. Error ocurred while loading parameters from parameter file 'koptParam.yaml'.
+-->Infeasible connection between viewpoints
+(23.0151, -125.534, 46.5221) and (-181.892, -131.435, 2.92245)
