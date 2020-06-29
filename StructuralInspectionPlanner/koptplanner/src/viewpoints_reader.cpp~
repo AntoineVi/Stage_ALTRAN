@@ -1,0 +1,188 @@
+#include "ros/ros.h"
+#include <fstream>
+#include <stdlib.h>
+#include <boost/algorithm/string.hpp>
+#include <ros/package.h>
+#include <visualization_msgs/Marker.h>
+#include <tf/transform_broadcaster.h>
+#include "LKH.h"
+#include "nav_msgs/Path.h"
+
+#define SQ(x) ((x)*(x))
+
+std::string pkgPath = ros::package::getPath("koptplanner");
+ros::Publisher viewpoint_pub;
+ros::Publisher marker_pub;
+
+// Static variables in the functions have to be reset, use bools (int) to trigger:
+int Gain23Static;
+int GreedyTourmark;
+int SFCTourRank;
+int ReadPenaltiesStatic;
+
+int maxID = 396; //number of triangle in the mesh
+int spaceSize[3] = {1000, 1000, 1000};
+
+double g_scale;
+double g_speed;
+double g_maxAngularSpeed;
+double g_cost;
+string g_tourlength;
+double g_rrt_scope;
+int g_rrt_it;
+int g_rrt_it_init;
+bool g_lazy_obstacle_check;
+
+std::vector<std::vector<std::vector<double>>> viewpoints_reader() {
+	std::vector<std::vector<std::vector<double>>> triangles;
+	std::vector<std::vector<double>> VPs;
+	std::vector<double> g;	
+
+	/* display sampled viewpoint in rviz */
+	visualization_msgs::Marker point;
+	point.header.frame_id = "/kopt_frame";
+	point.ns = "Viewpoints";
+	point.type = visualization_msgs::Marker::ARROW;
+
+	double scaleVP = sqrt(SQ(spaceSize[0])+SQ(spaceSize[1])+SQ(spaceSize[2]))/70.0; //from problemBoundary / spaceSize
+	scaleVP/=1;
+	point.scale.x = scaleVP;
+	point.scale.y = scaleVP/25.0;
+	point.scale.z = scaleVP/25.0;
+	point.color.r = 0.8f;
+	point.color.g = 0.5f;
+	point.color.b = 0.0f;
+	point.color.a = 0.7;
+	
+	point.lifetime = ros::Duration();
+	
+	std::ifstream viewpoint_file;
+	std::string line;
+	int cpt_viewpoints = 0;
+  
+	for(int i=1; i<=maxID; i++) {
+		viewpoint_file.open((pkgPath+"/viewpoints/viewpoint_"+std::to_string(i)).c_str());
+		if (viewpoint_file.is_open())	{
+			ROS_INFO_STREAM(("viewpoint_"+std::to_string(i)).c_str());
+			while(getline(viewpoint_file,line)) {
+				std::vector<std::string> pose;
+				boost::split(pose, line, boost::is_any_of("\t"));
+				point.id = i*1000+cpt_viewpoints;
+				point.pose.position.x = std::atof(pose[0].c_str());
+				point.pose.position.y = std::atof(pose[1].c_str());
+				point.pose.position.z = std::atof(pose[2].c_str());
+				tf::Quaternion q = tf::createQuaternionFromRPY(0,0,std::atof(pose[3].c_str()));
+				point.pose.orientation.x = q.x();
+				point.pose.orientation.y = q.y();
+				point.pose.orientation.z = q.z();
+				point.pose.orientation.w = q.w();
+				g.push_back(point.pose.position.x);
+				g.push_back(point.pose.position.y);
+				g.push_back(point.pose.position.z);
+				g.push_back(point.pose.orientation.x);
+				g.push_back(point.pose.orientation.y);
+				g.push_back(point.pose.orientation.z);
+				g.push_back(point.pose.orientation.w);
+				VPs.push_back(g);
+				
+				// Publish the marker
+				while (viewpoint_pub.getNumSubscribers() < 1) {
+					if (!ros::ok()) {
+						triangles.clear();
+						return triangles;
+					}
+					ROS_WARN_ONCE("Please create a subscriber to the marker");
+					sleep(1);
+				}
+				point.header.stamp = ros::Time::now();	
+				viewpoint_pub.publish(point);
+				cpt_viewpoints++;
+				//r.sleep();
+			}
+			ROS_INFO_STREAM(std::to_string(cpt_viewpoints).c_str());
+			cpt_viewpoints = 0;
+			viewpoint_file.close();
+		}
+		triangles.push_back(VPs);
+	}
+	return triangles;
+}
+
+int main(int argc, char **argv)
+{
+	ros::init(argc, argv, "viewpoints_reader");
+	ros::NodeHandle n;
+	ros::Rate r(1000);
+	viewpoint_pub = n.advertise<visualization_msgs::Marker>("viewpoint_marker", 1);  
+	
+	std::vector<std::vector<std::vector<double>>> VPs;
+	
+	VPs = viewpoints_reader();
+	
+	marker_pub = n.advertise<nav_msgs::Path>("visualization_marker", 1);
+	// static function variable reset variables:
+	Gain23Static = 0;
+	GreedyTourmark = 0;
+	SFCTourRank = 0;
+	ReadPenaltiesStatic = 0;
+	
+	g_speed = 0.25;
+	g_scale = g_speed*1.0e5/sqrt(SQ(spaceSize[0])+SQ(spaceSize[1])+SQ(spaceSize[2]));
+	
+	
+	
+	double ** vals = new double* [maxID];
+    for(int i = 0; i<maxID; i++)
+    {
+      vals[i] = new double[3];
+      vals[i][0] = VPs[i][0][0]*g_scale;
+      vals[i][1] = VPs[i][0][1]*g_scale;
+      vals[i][2] = VPs[i][0][2]*g_scale;
+    }
+    /* use provided interface of the TSP solver */
+    std::string params = "MOVE_TYPE=5\n";
+    params += "PRECISION=1\n";
+    params += "PATCHING_C=3\n";
+    params += "PATCHING_A=2\n";
+    params += "RUNS=1\n";
+    params += "TIME_LIMIT=5\n";
+    params += "TRACE_LEVEL=0\n";
+    params += "OUTPUT_TOUR_FILE=tempTour.txt\n";
+    params += "EOF";
+
+    std::string prob = "NAME:inspection\n";
+#ifdef USE_FIXEDWING_MODEL
+    prob += "TYPE:ATSP\n";
+    prob += "EDGE_WEIGHT_FORMAT:FULL_MATRIX\n";
+    prob += "EDGE_WEIGHT_TYPE:RRTFIXEDWING_3D\n";
+#else
+    prob += "TYPE:TSP\n";
+    prob += "EDGE_WEIGHT_TYPE:RRT_3D\n";
+#endif
+    std::stringstream ss; ss<<maxID;
+    prob += "DIMENSION:"+ss.str()+"\n";
+    prob += "NODE_COORD_SECTION\n";
+    prob += "EOF";
+#ifdef __TIMING_INFO__
+    gettimeofday(&time, NULL);
+    time_LKH -= time.tv_sec * 1000000 + time.tv_usec;
+#endif
+
+    size_t length = params.length();
+    char * par;
+    assert(par = (char*) malloc(length+10));
+    strcpy(par, params.c_str());
+    length = prob.length();
+    char * pro;
+    assert(pro = (char*) malloc(length+10));
+    strcpy(pro, prob.c_str());
+    /* call TSP solver */
+    LKHmainFunction(maxID,vals,par,pro);
+#ifdef __TIMING_INFO__
+    gettimeofday(&time, NULL);
+    time_LKH += time.tv_sec * 1000000 + time.tv_usec;
+#endif	
+	
+	
+	return 0;
+}

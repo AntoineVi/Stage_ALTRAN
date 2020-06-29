@@ -1,0 +1,82 @@
+import numpy as np
+import matplotlib.pyplot as plt
+import os
+
+def read_file(file_path):
+	costs = []
+	times = []
+
+	with open(file_path, 'r') as f:
+		for l in f.readlines():
+			#if 'STARTING ITERATION' in l:
+				#it = float(l[l.find('ITERATION')+10:len(l)-5].strip())
+			if 'New tour cost = ' in l:
+				cost = float(l[l.find('= ')+2:len(l)-5].strip())
+			elif 'Calculation time was:' in l:
+				time = float(l[l.find(':\t')+3:l.find('ms')].strip())
+				costs.append(cost)
+				times.append(float(l[l.find(':\t')+3:l.find('ms')].strip()))
+
+	return costs, times
+
+def plot(dir_path):
+	files = [f for f in os.listdir(dir_path) if '.txt' in f]
+	iters = np.arange(10,50)
+	cmap = plt.get_cmap('gnuplot')
+	colors = [cmap(i) for i in np.linspace(0,1,len(files))]
+	plt.title('Space area=[353.841728,245.546589,358.287254], minDist=1, Incidence angle=30deg')
+	
+	for f,c in zip(files,colors):
+		print(f)
+		costs, times = read_file(dir_path+'/'+f)
+		plt.subplot(211)
+		plt.title('Tour cost as function as number of iterations')
+		plt.plot(iters, costs[:40], 'o-', label=f.replace('_','=')[:f.find('.txt')], color=c)
+		plt.xlabel('LKH number of iterations')
+		plt.ylabel('LKH tour cost')
+		plt.grid()
+		plt.legend(loc='best')
+		plt.subplot(212)		
+		plt.title('Calculation time as function as number of iterations')
+		plt.plot(iters, times[:40], 'o-', label=f.replace('_','=')[:f.find('.txt')], color=c)
+		plt.xlabel('LKH number of iterations')
+		plt.ylabel('Calculation time (ms)')
+		plt.grid()
+		plt.legend(loc='best')
+	
+iters = np.arange(10,50)
+cmap = plt.get_cmap('gnuplot')
+colors = [cmap(i) for i in np.linspace(0,1,7)]
+
+plt.figure()
+costs, times50 = read_file('maxDist_test/res_1_50_30.txt')
+plt.plot(iters, costs[:40], 'o-', label='maxDist=50', color=colors[0])
+
+costs, times70 = read_file('maxDist_test/res_1_70_30.txt')
+plt.plot(iters, costs[:40], 'o-', label='maxDist=70', color=colors[2])
+
+costs, times70 = read_file('maxDist_test/res_1_80_30.txt')
+plt.plot(iters, costs[:40], 'o-', label='maxDist=80', color=colors[4])
+
+costs, times100 = read_file('maxDist_test/res_1_100_30.txt')
+plt.plot(iters, costs[:40], 'o-', label='maxDist=100', color=colors[6])
+
+plt.title('Space area is bounded by: [353.841728,245.546589,358.287254]')
+plt.xlabel('LKH number of iterations')
+plt.ylabel('LKH tour cost')
+plt.grid()
+plt.legend(loc='best')
+plt.show()
+
+plt.figure()
+plt.plot(iters, times50[:40], 'o-', label='maxDist=50', color=colors[0])
+plt.plot(iters, times70[:40], 'o-', label='maxDist=70', color=colors[2])
+plt.plot(iters, times70[:40], 'o-', label='maxDist=80', color=colors[4])
+plt.plot(iters, times100[:40], 'o-', label='maxDist=100', color=colors[6])
+plt.title('Space area is bounded by: [353.841728,245.546589,358.287254]')
+plt.xlabel('LKH number of iterations')
+plt.ylabel('Calculation time (ms)')
+plt.grid()
+plt.legend(loc='best')
+plt.show()
+
