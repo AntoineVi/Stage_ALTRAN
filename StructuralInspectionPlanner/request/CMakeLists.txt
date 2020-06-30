@@ -120,6 +120,7 @@ add_executable(bigBen src/bigBen.cpp)
 add_executable(hoaHakanaia src/hoaHakanaia.cpp)
 add_executable(solarPlant src/solarPlant.cpp)
 add_executable(a380 src/a380.cpp)
+add_executable(avion_VP_generator src/avion_VP_generator.cpp)
 
 ## Add cmake target dependencies of the executable/library
 ## as an example, message headers may need to be generated before nodes
@@ -129,6 +130,7 @@ add_dependencies(bigBen koptplanner_generated_messages_cpp)
 add_dependencies(hoaHakanaia koptplanner_generated_messages_cpp)
 add_dependencies(solarPlant koptplanner_generated_messages_cpp)
 add_dependencies(a380 koptplanner_generated_messages_cpp)
+add_dependencies(avion_VP_generator koptplanner_generated_messages_cpp)
 
 ## Specify libraries to link a library or executable target against
 target_link_libraries(request_beginning
@@ -147,6 +149,9 @@ target_link_libraries(solarPlant
   ${catkin_LIBRARIES}
 )
 target_link_libraries(a380
+  ${catkin_LIBRARIES}
+)
+target_link_libraries(avion_VP_generator
   ${catkin_LIBRARIES}
 )
 
