@@ -139,6 +139,7 @@ int main(int argc, char **argv)
 
 	initOK = false;
 	sleep_time = 0.005;
+	//sleep_time = 0.0;
 	obsBoxSize = 50;
 	pkgPath = ros::package::getPath("koptplanner");
 
@@ -570,7 +571,6 @@ bool viewpointsGenerator(koptplanner::inspection::Request  &req, koptplanner::in
 		file.open(pkgPath+"/viewpoints/viewpoint_0.txt", std::ios::app | std::ios::out);
 		if(!file.is_open())
 			ROS_ERROR("Could not open viewpoint file");
-			
 		file << std::to_string(itFixedPoses->position.x)+"\t";
 		file << std::to_string(itFixedPoses->position.y)+"\t";
 		file << std::to_string(itFixedPoses->position.z)+"\t";
@@ -727,7 +727,7 @@ bool viewpointsGenerator(koptplanner::inspection::Request  &req, koptplanner::in
 		delete s2;
 		s2 = NULL;
 		
-		ROS_INFO("%d VPs for triangle %d", gVect.size(), i);
+		ROS_INFO("%d VPs for triangle %d", (int) gVect.size(), i);
 		for(int j=gVect.size()-1; j>=0; j--) {
 			publishViewpoint(gVect[j], i*1000+j, float(i)/gVect.size());				
 

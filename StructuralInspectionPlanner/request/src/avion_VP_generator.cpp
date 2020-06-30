@@ -70,7 +70,6 @@ int main(int argc, char **argv)
   /* starting pose */
   reqPose.position.x = 0.0;
   reqPose.position.y = 0.0;
-  //reqPose.position.z = meshBounds[3]+srv.request.minDist;
   reqPose.position.z = 100.0;
   tf::Quaternion q = tf::createQuaternionFromRPY(0.0, 0.0, 0.0);
   reqPose.orientation.x = q.x();
