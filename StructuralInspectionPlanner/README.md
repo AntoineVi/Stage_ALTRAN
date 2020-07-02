@@ -60,6 +60,23 @@ Add the necessary displays:
 ```
 To display the progress, chose ‘/kopt_frame’ as fixed frame or publish a suitable transform.
 
+Antoine: execute my code
+---------------------------
+To test the planner with existing viewpoints:
+
+Shell #1
+```sh
+roslaunch koptplanner viewpoints_generator.launch
+```
+To add an obstacle to RVIZ, you have to click on "Publish Point" on the RVIZ toolbar and select a viewpoint marker.
+
+To generate and save viewpoints, in another shell:
+Shell #2
+```sh
+rosrun request avion_VP_generator 1000
+```
+where 1000 is an argument to choose the max number of viewpoints for one triangle of the mesh.
+
 Detailed Documentation
 ---------------------------
 Detailed documentation may be found at the [Wiki!](https://github.com/ethz-asl/StructuralInspectionPlanner/wiki)

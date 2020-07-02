@@ -1,6 +1,7 @@
 <launch>
+	<rosparam file="$(find koptplanner)/a380.yaml"/>
+
     <node name="Inspection_Planner" pkg="koptplanner" type="viewpoints_generator" clear_params="true" output="screen">
-	    <rosparam file="$(find koptplanner)/a380.yaml"/>
     </node>
     
     <node name="rviz" pkg="rviz" type="rviz"/>    

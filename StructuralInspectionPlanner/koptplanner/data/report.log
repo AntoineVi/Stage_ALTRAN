@@ -14,22 +14,50 @@ Field of view [h,v]:	[2.0944, 2.0944]rad
 Camera pitch:		0.436332rad
 
 -->Infeasible connection between viewpoints
-(0, 0, 100) and (15.3622, -12.3387, 268.639)
+(0, 0, 100) and (7.88199, -13.3987, 269.065)
 -->Infeasible connection between viewpoints
-(0, 0, 100) and (92.8506, -33.0947, 249.327)
+(131.666, 71.4727, 0.138306) and (131.666, 71.4727, 0.138306)
 -->Infeasible connection between viewpoints
-(0, 0, 100) and (13.8599, -7.80567, 228.799)
+(-81.8167, -130.981, -1.55029) and (-81.8167, -130.981, -1.55029)
 -->Infeasible connection between viewpoints
-(0, 0, 100) and (13.8599, -7.80567, 228.799)
+(0, 0, 100) and (83.1863, -19.5345, 40.0011)
 -->Infeasible connection between viewpoints
-(0, 0, 100) and (2.63391, -22.7028, 220.424)
+(0, 0, 100) and (74.7291, 6.68646, 58.1088)
 -->Infeasible connection between viewpoints
-(157.279, 167.865, 68.5161) and (47.2945, 221.815, -26.6133)
+(-19.0579, -18.1019, 73.5712) and (-19.0579, -18.1019, 73.5712)
 -->Infeasible connection between viewpoints
-(0, 0, 100) and (15.9398, -3.18538, 238.089)
+(0, 0, 100) and (-19.994, -15.7517, 0.765976)
 -->Infeasible connection between viewpoints
-(0, 0, 100) and (-48.8217, 8.91878, 252.813)
+(0, 0, 100) and (38.421, -23.485, 143.489)
 -->Infeasible connection between viewpoints
-(0, 0, 100) and (4.0011, -6.0856, 230.891)
+(0, 0, 100) and (128.711, -5.04085, 49.5343)
 -->Infeasible connection between viewpoints
-(0, 0, 100) and (-20.0438, -14.6254, 246.961)
+(0, 0, 100) and (128.711, -5.04085, 49.5343)
+-->Infeasible connection between viewpoints
+(0, 0, 100) and (128.711, -5.04085, 49.5343)
+-->Infeasible connection between viewpoints
+(0, 0, 100) and (8.47028, -30.3969, 17.3699)
+-->Infeasible connection between viewpoints
+(0, 0, 100) and (93.4672, -1.58465, 83.893)
+-->Infeasible connection between viewpoints
+(0, 0, 100) and (84.6604, -30.1214, 48.6236)
+-->Infeasible connection between viewpoints
+(64.5683, -84.5459, -28.6074) and (-5.78888, -135.318, -98.5443)
+-->Infeasible connection between viewpoints
+(64.5683, -84.5459, -28.6074) and (-4.85973, -142.162, -103.347)
+-->Infeasible connection between viewpoints
+(0, 0, 100) and (33.4597, 74.2444, -21.3318)
+-->Infeasible connection between viewpoints
+(0, 0, 100) and (139.317, -43.227, -0.756485)
+-->Infeasible connection between viewpoints
+(0, 0, 100) and (146, -20.4951, 1.21855)
+-->Infeasible connection between viewpoints
+(0, 0, 100) and (-6.82899, -66.3425, 1.37781)
+-->Infeasible connection between viewpoints
+(0, 0, 100) and (137.641, -3.71338, 0.937637)
+-->Infeasible connection between viewpoints
+(0, 0, 100) and (97.2079, -75.9711, 3.14337)
+-->Infeasible connection between viewpoints
+(0, 0, 100) and (127.288, -32.4176, -2.97455)
+-->Infeasible connection between viewpoints
+(0, 0, 100) and (-47.164, 26.5002, 1.22961)

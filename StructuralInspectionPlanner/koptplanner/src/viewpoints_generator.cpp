@@ -94,13 +94,14 @@ double g_max_obs_dim;
 
 std::string pkgPath;
 
-
 int obsBoxSize;
 ros::Publisher obstacle_pub;
 ros::Publisher stl_pub;
 bool initOK;
 double sleep_time;
 ros::Subscriber clickedPoint_sub;
+
+std::vector<nav_msgs::Path>* mesh;
 
 bool endPoint;
 double scaleVP;
@@ -112,16 +113,20 @@ void init();
 void clean();
 
 void poseObstacle(const geometry_msgs::PointStamped& clicked_pose);
-std::vector<nav_msgs::Path> * readSTLfile(std::string name);
+void readSTLfile(std::string name);
 void publishStl();
 void publishViewpoint(StateVector stateVP, int VP_id, double blue);
-
-bool viewpointsGenerator(koptplanner::inspection::Request  &req, koptplanner::inspection::Response &res);
-void viewpointReaderFile(int VP_id);
-void planFromSavedVPs();
 void publishlatestPath();
 
+bool viewpointsGenerator(koptplanner::inspection::Request  &req, koptplanner::inspection::Response &res);
+
 bool inClickedObstacle(StateVector VPtmp);
+void viewpointReaderFile(int VP_id);
+
+bool isTriangleVisible(double xmin, double ymin, double zmin, double xmax, double ymax, double zmax);
+void viewpointTriangleReaderFile(int VP_id);
+
+void planFromSavedVPs();
 
 std::vector<int> listKO;
 void debugNoVP(std::vector<int> listKO);
@@ -138,12 +143,13 @@ int main(int argc, char **argv)
 	stl_pub = n.advertise<nav_msgs::Path>("stl_mesh", 1);
 
 	initOK = false;
-	sleep_time = 0.005;
-	//sleep_time = 0.0;
+	//sleep_time = 0.005;
+	sleep_time = 0.0;
 	obsBoxSize = 50;
 	pkgPath = ros::package::getPath("koptplanner");
 
 	publishStl();
+	
 	publishlatestPath();
 
 	ROS_INFO("Ready to receive obstacle pose from Publish point");
@@ -254,9 +260,7 @@ void poseObstacle(const geometry_msgs::PointStamped& clicked_pose) {
 	obstacle_pub.publish(marker);
 
 	ros::Duration(sleep_time).sleep();
-	
-	
-	
+				
 	planFromSavedVPs();
 }
 
@@ -402,7 +406,7 @@ void init() {
 	g_const_C = 1.0; // NA
 	g_const_D = 1.0;
 	g_lazy_obstacle_check = false;
-	g_security_distance = 2.0;
+	g_security_distance = 5.0;
 #else
 	a_model_has_to_be_defined;
 #endif
@@ -791,6 +795,7 @@ bool viewpointsGenerator(koptplanner::inspection::Request  &req, koptplanner::in
 	return koptError == SUCCESSFUL;
 }
 
+// Euclidean distance between obstacle center and VP
 bool inClickedObstacle(StateVector VPtmp) {
 	return sqrt(SQ(VPtmp[0]-sys_t::obstacles.front()->center[0]) +
 				SQ(VPtmp[1]-sys_t::obstacles.front()->center[1]) +
@@ -815,6 +820,93 @@ void viewpointReaderFile(int VP_id) {
 			VPtmp[3] = std::atof(pose[5].c_str());
 									
 			VP_OK = inClickedObstacle(VPtmp);
+		}
+		file.close();
+		
+		if(VP_OK) {
+			// VP = global variable
+			VP[VP_id][0] = VPtmp[0];
+			VP[VP_id][1] = VPtmp[1];
+			VP[VP_id][2] = VPtmp[2];
+			VP[VP_id][3] = VPtmp[3];
+			
+			publishViewpoint(VPtmp, VP_id, 0.0);
+		}
+		else {
+			ROS_ERROR("No collision free viewpoint for triangle %d", VP_id);
+			listKO.push_back(VP_id);
+			VP[VP_id][0] = sys_t::obstacles.front()->center[0];
+			VP[VP_id][1] = sys_t::obstacles.front()->center[1];
+			VP[VP_id][2] = sys_t::obstacles.front()->center[2];
+			VP[VP_id][3] = 0.0;
+			ROS_INFO("VP= x:%f, y:%f, z:%f (Center of the obstacle)", VP[VP_id][0], VP[VP_id][1], VP[VP_id][2]);
+			//ros::shutdown();
+		}		
+	}
+	else {
+		ROS_ERROR("Viewpoint %d file not found", VP_id);
+	}
+}
+
+bool isTriangleVisible(double xmin, double ymin, double zmin, double xmax, double ymax, double zmax) {
+
+	double x_obsEdge1 = sys_t::obstacles.front()->center[0]-0.5*sys_t::obstacles.front()->size[0]-g_security_distance;
+	double x_obsEdge2 = sys_t::obstacles.front()->center[0]+0.5*sys_t::obstacles.front()->size[0]+g_security_distance;
+	
+	double y_obsEdge1 = sys_t::obstacles.front()->center[1]-0.5*sys_t::obstacles.front()->size[1]-g_security_distance;
+	double y_obsEdge2 = sys_t::obstacles.front()->center[1]+0.5*sys_t::obstacles.front()->size[1]+g_security_distance;
+	
+	double z_obsEdge1 = sys_t::obstacles.front()->center[2]-0.5*sys_t::obstacles.front()->size[2]-g_security_distance;
+	double z_obsEdge2 = sys_t::obstacles.front()->center[2]+0.5*sys_t::obstacles.front()->size[2]+g_security_distance;
+	
+	return (x_obsEdge1 < xmin && x_obsEdge2 < xmin || x_obsEdge1 > xmax && x_obsEdge2 > xmax ||
+			y_obsEdge1 < ymin && y_obsEdge2 < ymin || y_obsEdge1 > ymax && y_obsEdge2 > ymax ||
+			z_obsEdge1 < zmin && z_obsEdge2 < zmin || z_obsEdge1 > zmax && z_obsEdge2 > zmax);
+}
+
+void viewpointTriangleReaderFile(int VP_id) {
+	bool VP_OK = false;
+	std::string line;
+	StateVector VPtmp;
+	
+	std::vector<double> xs;
+	std::vector<double> ys;
+	std::vector<double> zs;
+	
+	if(VP_id > 0) {
+		xs = {(*mesh)[VP_id-1].poses[0].pose.position.x, (*mesh)[VP_id-1].poses[1].pose.position.x, (*mesh)[VP_id-1].poses[2].pose.position.x};
+		ys = {(*mesh)[VP_id-1].poses[0].pose.position.y, (*mesh)[VP_id-1].poses[1].pose.position.y, (*mesh)[VP_id-1].poses[2].pose.position.y};
+		zs = {(*mesh)[VP_id-1].poses[0].pose.position.z, (*mesh)[VP_id-1].poses[1].pose.position.z, (*mesh)[VP_id-1].poses[2].pose.position.z};
+	}
+	
+	file.open((pkgPath+"/viewpoints/viewpoint_"+std::to_string(VP_id)+".txt").c_str());
+	if (file.is_open())	{
+		while(!VP_OK && getline(file,line)) {
+			std::vector<std::string> pose;
+			boost::split(pose, line, boost::is_any_of("\t"));
+
+			// StateVector for Rotorcraft = [x,y,z,yaw]
+			VPtmp[0] = std::atof(pose[0].c_str());
+			VPtmp[1] = std::atof(pose[1].c_str());
+			VPtmp[2] = std::atof(pose[2].c_str());
+			VPtmp[3] = std::atof(pose[5].c_str());			
+
+			xs.push_back(VPtmp[0]);
+			auto minmaxX = std::minmax_element(xs.begin(), xs.end());
+ 
+			ys.push_back(VPtmp[1]);
+			auto minmaxY = std::minmax_element(ys.begin(), ys.end());
+			
+			zs.push_back(VPtmp[2]);
+			auto minmaxZ = std::minmax_element(zs.begin(), zs.end());
+			
+			VP_OK = isTriangleVisible(*minmaxX.first, *minmaxY.first, *minmaxZ.first, *minmaxX.second, *minmaxY.second, *minmaxZ.second);
+						
+			if(!VP_OK) {
+				xs.pop_back();
+				ys.pop_back();
+				zs.pop_back();
+			}
 		}
 		file.close();
 		
@@ -869,6 +961,7 @@ void debugNoVP(std::vector<int> listKO) {
 		else
 			ROS_ERROR("File not found");
 	}
+	listKO.clear();
 }
 
 void planFromSavedVPs() {
@@ -889,7 +982,7 @@ void planFromSavedVPs() {
 	for(int i = 0; i<maxID; i++) {
 		vals[i] = new double[3];
 				
-		viewpointReaderFile(i);
+		viewpointTriangleReaderFile(i);
 		
 		vals[i][0] = VP[i][0]*g_scale;
 		vals[i][1] = VP[i][1]*g_scale;
@@ -981,6 +1074,7 @@ void planFromSavedVPs() {
 	delete[] plannerArray;
 	delete[] reinitRRTs;
 	reinitRRTs = NULL;
+	
 	clean();
 }
 
@@ -1006,8 +1100,8 @@ void clean() {
 	initOK = false;
 }
 
-std::vector<nav_msgs::Path> * readSTLfile(std::string name) {
-	std::vector<nav_msgs::Path> * mesh = new std::vector<nav_msgs::Path>;
+void readSTLfile(std::string name) {
+	mesh = new std::vector<nav_msgs::Path>;
 	std::fstream f;
 	f.open(name.c_str());
 	assert(f.is_open());
@@ -1090,11 +1184,10 @@ std::vector<nav_msgs::Path> * readSTLfile(std::string name) {
 	free(line);
 	f.close();
 	ROS_INFO("Mesh area is bounded by: [%2.2f,%2.2f]x[%2.2f,%2.2f]x[%2.2f,%2.2f]", minX,maxX,minY,maxY,minZ,maxZ);
-	return mesh;
 }
 
 void publishStl() {
-	std::vector<nav_msgs::Path>* mesh = readSTLfile(ros::package::getPath("request")+"/meshes/asciiavion.stl");
+	readSTLfile(ros::package::getPath("request")+"/meshes/asciiavion.stl");
 	ros::Rate r(50.0);
 	
 	/* publish STL file to rviz */
