@@ -1,5 +1,23 @@
 StructuralInspectionPlanner
 ===========================
+Antoine: execute my code
+---------------------------
+To test the planner with existing viewpoints:
+
+Shell #1
+```sh
+roslaunch koptplanner viewpoints_generator.launch
+```
+To add an obstacle to RVIZ, you have to click on "Publish Point" on the RVIZ toolbar and select a viewpoint marker.
+
+To generate and save viewpoints, in another shell:
+Shell #2
+```sh
+rosrun request avion_VP_generator 1000
+```
+where 1000 is an argument to choose the max number of viewpoints for one triangle of the mesh.
+
+
 **Beta version**
 
 The structural inspection path planning algorithm presented in our paper contribution [1] is released as an open-source toolbox. The algorithm assumes a triangular mesh representation of the structure and employs an alternating two-step optimization paradigm to find good viewpoints that together provide full coverage and a connecting path that has low cost. In every iteration, the viewpoints are chosen such that the connection cost is reduced and, subsequently, the tour is optimized. Vehicle and sensor limitations are respected within both steps. Sample implementations are provided for rotorcraft and fixed-wing unmanned aerial robots.
@@ -59,23 +77,6 @@ Add the necessary displays:
 ‘Marker’ on topic ‘scenario’
 ```
 To display the progress, chose ‘/kopt_frame’ as fixed frame or publish a suitable transform.
-
-Antoine: execute my code
----------------------------
-To test the planner with existing viewpoints:
-
-Shell #1
-```sh
-roslaunch koptplanner viewpoints_generator.launch
-```
-To add an obstacle to RVIZ, you have to click on "Publish Point" on the RVIZ toolbar and select a viewpoint marker.
-
-To generate and save viewpoints, in another shell:
-Shell #2
-```sh
-rosrun request avion_VP_generator 1000
-```
-where 1000 is an argument to choose the max number of viewpoints for one triangle of the mesh.
 
 Detailed Documentation
 ---------------------------
