@@ -34,6 +34,7 @@
 
 #include <boost/algorithm/string.hpp>
 #include <boost/filesystem.hpp>
+#include <unordered_set>
 
 #ifdef __TIMING_INFO__
  long time_DBS;
@@ -83,7 +84,6 @@ double g_const_C;
 double g_const_D;
 bool g_lazy_obstacle_check;
 double g_security_distance;
-double vp_tol;
 
 bool g_closed_tour;
 double g_cost;
@@ -93,66 +93,43 @@ koptError_t koptError;
 double g_max_obs_dim;
 
 std::string pkgPath;
-
-int obsBoxSize;
-ros::Publisher obstacle_pub;
-ros::Publisher stl_pub;
-bool initOK;
 double sleep_time;
-ros::Subscriber clickedPoint_sub;
-
+double scaleVP;
+ros::Publisher stl_pub;
 std::vector<nav_msgs::Path>* mesh;
 
-bool endPoint;
-double scaleVP;
-std::vector<double> spaceSize = {1000.0, 1000.0, 1000.0};
-std::vector<double> spaceCenter = {0.0, 0.0, 0.0};
-
-int count_files(std::string directory, std::string ext);
-void init();
-void clean();
-
-void poseObstacle(const geometry_msgs::PointStamped& clicked_pose);
+void publishViewpoint(StateVector stateVP, int VP_id, double blue);
 void readSTLfile(std::string name);
 void publishStl();
-void publishViewpoint(StateVector stateVP, int VP_id, double blue);
-void publishlatestPath();
 
 bool viewpointsGenerator(koptplanner::inspection::Request  &req, koptplanner::inspection::Response &res);
 
-bool inClickedObstacle(StateVector VPtmp);
-void viewpointReaderFile(int VP_id);
-
-bool isTriangleVisible(double xmin, double ymin, double zmin, double xmax, double ymax, double zmax);
-void viewpointTriangleReaderFile(int VP_id);
-
-void planFromSavedVPs();
-
-std::vector<int> listKO;
-void debugNoVP(std::vector<int> listKO);
-
 int main(int argc, char **argv)
 {
-	ros::init(argc, argv, "koptplanner");
+	ros::init(argc, argv, "viewpoint_generator");
 	ros::NodeHandle n;
+	reinitRRTs = NULL;
+	maxID = 0;
+	VP = NULL;
+	lookupTable = NULL;
+	plannerArrayBool = false;
+	g_closed_tour = true;
+
+	// static function variable reset variables:
+	Gain23Static = 0;
+	GreedyTourmark = 0;
+	SFCTourRank = 0;
+	ReadPenaltiesStatic = 0;
 
 	marker_pub = n.advertise<nav_msgs::Path>("visualization_marker", 1);
-	viewpoint_pub = n.advertise<visualization_msgs::Marker>("viewpoint_marker", 1);  
-	clickedPoint_sub = n.subscribe("clicked_point", 1, poseObstacle);
-	obstacle_pub = n.advertise<visualization_msgs::Marker>("scenario", 1);
+	viewpoint_pub = n.advertise<visualization_msgs::Marker>("viewpoint_marker", 1);
 	stl_pub = n.advertise<nav_msgs::Path>("stl_mesh", 1);
 
-	initOK = false;
+	publishStl();
+
 	//sleep_time = 0.005;
 	sleep_time = 0.0;
-	obsBoxSize = 50;
 	pkgPath = ros::package::getPath("koptplanner");
-
-	publishStl();
-	
-	publishlatestPath();
-
-	ROS_INFO("Ready to receive obstacle pose from Publish point");
 
 	ros::ServiceServer service = n.advertiseService("inspectionPath", viewpointsGenerator);
 	ROS_INFO("Service started");
@@ -160,122 +137,6 @@ int main(int argc, char **argv)
 	ros::spin();
 
 	return 0;
-}
-
-void publishlatestPath() {
-	nav_msgs::Path latestPath;
-	std::string line;
-	int id = 0;
-	
-	latestPath.header.frame_id = "/kopt_frame";
-	latestPath.header.stamp = ros::Time::now();	
-	
-	file.open(pkgPath+"/data/latestPath.csv");
-	if (file.is_open())	{
-		while(getline(file,line)) {
-			geometry_msgs::PoseStamped poseTmp;
-			
-			std::vector<std::string> poseStr;
-			
-			poseTmp.header.seq = id;
-			poseTmp.header.stamp = ros::Time::now();
-			poseTmp.header.frame_id = "/kopt_frame";
-			
-			boost::split(poseStr, line, boost::is_any_of(","));
-			
-			poseTmp.pose.position.x = std::atof(poseStr[0].c_str());
-			poseTmp.pose.position.y = std::atof(poseStr[1].c_str());
-			poseTmp.pose.position.z = std::atof(poseStr[2].c_str());			
-			tf::Quaternion q = tf::createQuaternionFromRPY(std::atof(poseStr[3].c_str()),std::atof(poseStr[4].c_str()),std::atof(poseStr[5].c_str()));
-			poseTmp.pose.orientation.x = q.x();
-			poseTmp.pose.orientation.y = q.y();
-			poseTmp.pose.orientation.z = q.z();
-			poseTmp.pose.orientation.w = q.w();
-			latestPath.poses.push_back(poseTmp);
-			
-			StateVector stateVP;
-			stateVP[0] = poseTmp.pose.position.x;
-			stateVP[1] = poseTmp.pose.position.y;
-			stateVP[2] = poseTmp.pose.position.z;
-			stateVP[3] = std::atof(poseStr[5].c_str());
-			
-			publishViewpoint(stateVP, id, 0);
-						
-			id++;
-		}
-	}
-	else
-		ROS_ERROR("Error on path sfile");
-	file.close();
-	marker_pub.publish(latestPath);	
-}
-
-void poseObstacle(const geometry_msgs::PointStamped& clicked_pose) {		
-	/* obstacles */
-	reg_t * obs = new reg_t;
-	obs->setNumDimensions(3);
-	obs->occupied = 0;
-	obs->center[0] = clicked_pose.point.x;
-	obs->center[1] = clicked_pose.point.y;
-	obs->center[2] = clicked_pose.point.z;
-	
-	obs->size[0] = obsBoxSize;
-	obs->size[1] = obsBoxSize;
-	obs->size[2] = obsBoxSize;
-	if(g_max_obs_dim<obs->size[0])
-		g_max_obs_dim=obs->size[0];
-	if(g_max_obs_dim<obs->size[1])
-		g_max_obs_dim=obs->size[1];
-	if(g_max_obs_dim<obs->size[2])
-		g_max_obs_dim=obs->size[2];
-	sys_t::obstacles.push_back(obs);
-	
-	// publish obstacles for rviz 
-	visualization_msgs::Marker marker;
-	marker.header.frame_id = "/kopt_frame";
-	marker.header.stamp = ros::Time::now();
-	marker.ns = "obstacles";
-	marker.id = 0; // enumerate when adding more obstacles
-	marker.type = visualization_msgs::Marker::CUBE;
-	marker.action = visualization_msgs::Marker::ADD;
-
-	marker.pose.position.x = clicked_pose.point.x;
-	marker.pose.position.y = clicked_pose.point.y;
-	marker.pose.position.z = clicked_pose.point.z;
-	marker.pose.orientation.x = 0;
-	marker.pose.orientation.y = 0;
-	marker.pose.orientation.z = 0;
-	marker.pose.orientation.w = 1;
-
-	marker.scale.x = obsBoxSize;
-	marker.scale.y = obsBoxSize;
-	marker.scale.z = obsBoxSize;
-
-	marker.color.r = 0.0f;
-	marker.color.g = 0.0f;
-	marker.color.b = 1.0f;
-	marker.color.a = 0.5;
-
-	marker.lifetime = ros::Duration();
-	obstacle_pub.publish(marker);
-
-	ros::Duration(sleep_time).sleep();
-				
-	planFromSavedVPs();
-}
-
-int count_files(std::string directory, std::string ext)
-{
-	namespace fs = boost::filesystem;
-	fs::path Path(directory);
-	int Nb_ext = 0;
-	fs::directory_iterator end_iter; // Default constructor for an iterator is the end iterator
-
-	for (fs::directory_iterator iter(Path); iter != end_iter; ++iter)
-		if (iter->path().extension() == ext)
-			++Nb_ext;
-
-	return Nb_ext;
 }
 
 void publishViewpoint(StateVector stateVP, int VP_ind, double blue) {
@@ -289,7 +150,6 @@ void publishViewpoint(StateVector stateVP, int VP_ind, double blue) {
 	point.pose.position.x = stateVP[0];
 	point.pose.position.y = stateVP[1];
 	point.pose.position.z = stateVP[2];
-	double scaleVP;
 
 #if DIMENSIONALITY>4
 	tf::Quaternion q = tf::createQuaternionFromRPY(stateVP[3],stateVP[4],stateVP[5]);
@@ -301,11 +161,6 @@ void publishViewpoint(StateVector stateVP, int VP_ind, double blue) {
 	point.pose.orientation.z = q.z();
 	point.pose.orientation.w = q.w();
 	
-	if(problemBoundary.size)
-		scaleVP = sqrt(SQ(problemBoundary.size[0])+SQ(problemBoundary.size[1])+SQ(problemBoundary.size[2]))/70.0;
-	else
-		scaleVP = sqrt(SQ(spaceSize[0])+SQ(spaceSize[1])+SQ(spaceSize[2]))/70.0;
-	scaleVP/=1;
 	point.scale.x = scaleVP;
 	point.scale.y = scaleVP/25.0;
 	point.scale.z = scaleVP/25.0;
@@ -319,34 +174,9 @@ void publishViewpoint(StateVector stateVP, int VP_ind, double blue) {
 	ros::Duration(sleep_time).sleep();
 }
 
-void init() {
-	ROS_INFO("Initialisation");
+bool viewpointsGenerator(koptplanner::inspection::Request  &req, koptplanner::inspection::Response &res) {
 
-	reinitRRTs = NULL;
-	VP = NULL;
-	lookupTable = NULL;
-	plannerArrayBool = false;
-	g_closed_tour = true;
-	res_g = new koptplanner::inspection::Response();
-
-	// static function variable reset variables:
-	Gain23Static = 1;
-	GreedyTourmark = 1;
-	SFCTourRank = 1;
-	ReadPenaltiesStatic = 1;
-
-	maxID = count_files((pkgPath+"/viewpoints").c_str(), ".txt"); // Number of files in viewpoints directory
-	
-	g_tourlength = pkgPath + "/data/tourlength.m";
-	file.open(g_tourlength.c_str(), std::ios::out);
-	if(file.is_open()) {
-		file << "length=[";
-		file.close();
-	}
-	else {
-		ROS_WARN("tourlength file not found");
-	}
-
+	koptError = SUCCESSFUL;
 	
 	/* loading the parameters */
 #ifdef USE_FIXEDWING_MODEL
@@ -376,16 +206,17 @@ void init() {
 			ROS_ERROR("Could not open report.log");
 		plannerLog << "-->Missing parameter. Error ocurred while loading parameters from parameter file 'koptParam.yaml'.\n";
 		plannerLog.close();
-		return;
+		return true;
 	}
+	
 	/* loading the optional parameters */
 #ifdef USE_FIXEDWING_MODEL
-	vp_tol = 2.0e-6*sqrt(SQ(spaceSize[0])+SQ(spaceSize[1])+SQ(spaceSize[2]));
-	g_rrt_scope = 0.25*sqrt(SQ(spaceSize[0])+SQ(spaceSize[1])+SQ(spaceSize[2]));
+	double vp_tol = 2.0e-6*sqrt(SQ(req.spaceSize[0])+SQ(req.spaceSize[1])+SQ(req.spaceSize[2]));
+	g_rrt_scope = 0.25*sqrt(SQ(req.spaceSize[0])+SQ(req.spaceSize[1])+SQ(req.spaceSize[2]));
 	g_rrt_it = 100;
 	g_rrt_it_init = 0;
 	g_max_obstacle_depth = 3;
-	g_discretization_step = 1.0e-2*sqrt(SQ(spaceSize[0])+SQ(spaceSize[1]));
+	g_discretization_step = 1.0e-2*sqrt(SQ(req.spaceSize[0])+SQ(req.spaceSize[1]));
 	g_angular_discretization_step = 0.2;
 	g_const_A = 1.0e6;
 	g_const_B = 3.0;
@@ -394,12 +225,12 @@ void init() {
 	g_lazy_obstacle_check = false;
 	g_security_distance = sys_t::r_min;
 #elif defined USE_ROTORCRAFT_MODEL
-	vp_tol = 2.0e-6*sqrt(SQ(spaceSize[0])+SQ(spaceSize[1])+SQ(spaceSize[2]));
-	g_rrt_scope = 0.125*sqrt(SQ(spaceSize[0])+SQ(spaceSize[1])+SQ(spaceSize[2]));
+	double vp_tol = 2.0e-6*sqrt(SQ(req.spaceSize[0])+SQ(req.spaceSize[1])+SQ(req.spaceSize[2]));
+	g_rrt_scope = 0.125*sqrt(SQ(req.spaceSize[0])+SQ(req.spaceSize[1])+SQ(req.spaceSize[2]));
 	g_rrt_it = 50;
 	g_rrt_it_init = 0;
 	g_max_obstacle_depth = 3;
-	g_discretization_step = 5.0e-3*sqrt(SQ(spaceSize[0])+SQ(spaceSize[1]));
+	g_discretization_step = 5.0e-3*sqrt(SQ(req.spaceSize[0])+SQ(req.spaceSize[1]));
 	g_angular_discretization_step = 0.2;
 	g_const_A = 1.0; // NA
 	g_const_B = 1.0; // NA
@@ -426,81 +257,20 @@ void init() {
 	ros::param::get("algorithm/security_distance", g_security_distance);
   
 #ifdef USE_FIXEDWING_MODEL
-	g_scale = 1.0e5/sqrt(SQ(spaceSize[0])+SQ(spaceSize[1])+SQ(spaceSize[2]));
+	g_scale = 1.0e5/sqrt(SQ(req.spaceSize[0])+SQ(req.spaceSize[1])+SQ(req.spaceSize[2]));
 #else
-	g_scale = g_speed*1.0e5/sqrt(SQ(spaceSize[0])+SQ(spaceSize[1])+SQ(spaceSize[2]));
+	g_scale = g_speed*1.0e5/sqrt(SQ(req.spaceSize[0])+SQ(req.spaceSize[1])+SQ(req.spaceSize[2]));
 #endif
-  
-  	/* initialize problem setup */
-	g_cost = DBL_MAX;
-#ifdef __TIMING_INFO__
-	time_DBS = 0;
-	time_RRTS = 0;
-	time_RRTS_req = 0;
-	time_LKH = 0;
-	time_READ = 0;
-#endif
-	time_start = 0;
-	
-	problemBoundary.setNumDimensions(3);
-	assert(spaceCenter.size() == 3 && spaceSize.size());
-	for(int i=0; i<3;i++) {
-		problemBoundary.size[i] = spaceSize[i];
-		problemBoundary.center[i] = spaceCenter[i];
-	}
-	
+
 	if(lookupTable)	{
 		for(int i = 0; i < LOOKUPTABLE_SIZE; i++)
 			delete[] lookupTable[i];
 		delete[] lookupTable;
 		lookupTable = NULL;
 	}
-	
-	if(VP) {
-	delete[] VP;
-	}
-#ifdef USE_FIXEDWING_MODEL
-	VP = new StateVector[2*maxID];
-	/* load lookup table */
-	std::fstream lookupFile;
-	lookupFile.open((pkgPath+"/lookupTable/lookupTable50x50.txt").c_str(), std::ios::in);
-	lookupTable = new double*[LOOKUPTABLE_SIZE];
-	for (int i = 0; i<LOOKUPTABLE_SIZE; i++) {
-		lookupTable[i] = new double[LOOKUPTABLE_SIZE];
-		for (int j = 0; j<LOOKUPTABLE_SIZE; j++) {
-			lookupFile >> lookupTable[i][j];
-		}
-	}
-#else
-	VP = new StateVector[maxID];
-#endif
-	if(reinitRRTs==NULL)
-		reinitRRTs = new int[maxID];
-	for(int q = 0; q<maxID; q++) {
-		reinitRRTs[q] = 1;
-	}
-		
-	scaleVP = sqrt(SQ(problemBoundary.size[0])+SQ(problemBoundary.size[1])+SQ(problemBoundary.size[2]))/70.0;
-	scaleVP/=1;
-	
-	initOK = true;
-}
 
-bool viewpointsGenerator(koptplanner::inspection::Request  &req, koptplanner::inspection::Response &res) {
-	ROS_INFO("Request received");
-
-	if(!initOK)
-		init();
-	tri_t::initialized = false;
-	sleep_time = 0.0;
-		
-	koptError = SUCCESSFUL;
-	/* clean viewpoints file */
-	for(int i=0; i<maxID; i++) {
-		file.open((pkgPath+"/viewpoints/viewpoint_"+std::to_string(i)+".txt").c_str(), std::ios::out);
-		file.close();
-	}
-  
+	g_tourlength = pkgPath + "/data/tourlength.m";
+	
 	/* preparing log file */
 	std::fstream plannerLog;
 	plannerLog.open((pkgPath+"/data/report.log").c_str(), std::ios::out);
@@ -527,7 +297,27 @@ bool viewpointsGenerator(koptplanner::inspection::Request  &req, koptplanner::in
 	plannerLog << "Camera pitch:\t\t" << g_camPitch <<"rad\n\n";
 	plannerLog.close();
 
+  	/* initialize problem setup */
+	g_cost = DBL_MAX;
+#ifdef __TIMING_INFO__
+	time_DBS = 0;
+	time_RRTS = 0;
+	time_RRTS_req = 0;
+	time_LKH = 0;
+	time_READ = 0;
+#endif
+	time_start = 0;
+	
+	problemBoundary.setNumDimensions(3);
+	assert(req.spaceCenter.size() == 3 && req.spaceSize.size());
+	for(int i=0; i<3;i++) {
+		problemBoundary.size[i] = req.spaceSize[i];
+		problemBoundary.center[i] = req.spaceCenter[i];
+	}
 	res_g = &res;
+	
+	scaleVP = sqrt(SQ(problemBoundary.size[0])+SQ(problemBoundary.size[1])+SQ(problemBoundary.size[2]))/70.0;
+	scaleVP/=1;
 
 	g_max_obs_dim = 0;
 	if(req.requiredPoses.size() < 1){ 
@@ -547,7 +337,9 @@ bool viewpointsGenerator(koptplanner::inspection::Request  &req, koptplanner::in
 	gettimeofday(&time, NULL);
 	long millisecStart = time.tv_sec * 1000 + time.tv_usec / 1000;
 	time_start = millisecStart;
-
+	ros::Rate visualizerRate(1000);
+	bool endPoint = false;
+	
 	tri_t::setCamBoundNormals();
 	std::vector<tri_t*> tri;
 	tri_t::setParam(req.incidenceAngle, req.minDist, req.maxDist); // incidence angle from surface plane
@@ -572,6 +364,8 @@ bool viewpointsGenerator(koptplanner::inspection::Request  &req, koptplanner::in
 #endif
 		tmp->Fixpoint = true;
 		tri.push_back(tmp);
+		
+		// Write start point in the viewpoint id=0 file
 		file.open(pkgPath+"/viewpoints/viewpoint_0.txt", std::ios::app | std::ios::out);
 		if(!file.is_open())
 			ROS_ERROR("Could not open viewpoint file");
@@ -683,6 +477,7 @@ bool viewpointsGenerator(koptplanner::inspection::Request  &req, koptplanner::in
 		tmp->Fixpoint = true;
 		tri.push_back(tmp);
 		
+		// Write the end point in viewpoint id=maxID file
 		file.open((pkgPath+"/viewpoints/viewpoint_"+std::to_string(tri.size())+".txt").c_str(), std::ios::app | std::ios::out);
 		if(!file.is_open())
 			ROS_ERROR("Could not open viewpoint file");
@@ -694,6 +489,15 @@ bool viewpointsGenerator(koptplanner::inspection::Request  &req, koptplanner::in
 		file << std::to_string((req.requiredPoses.end()-1)->orientation.z)+"\t";
 		file << std::to_string((req.requiredPoses.end()-1)->orientation.w)+"\n";
 		file.close();
+	}
+	
+	file.open(g_tourlength.c_str(), std::ios::out);
+	if(file.is_open()) {
+		file << "length=[";
+		file.close();
+	}
+	else {
+		ROS_WARN("tourlength file not found");
 	}
  
 	maxID = tri.size();
@@ -708,6 +512,45 @@ bool viewpointsGenerator(koptplanner::inspection::Request  &req, koptplanner::in
 		plannerLog.close();
 		koptError = TOO_FEW_INSPECTION_AREAS;
 		return true;
+	}
+	
+	if(endPoint) {
+		/* clean viewpoints file */
+		for(int i=1; i<maxID-1; i++) {
+			file.open((pkgPath+"/viewpoints/viewpoint_"+std::to_string(i)+".txt").c_str(), std::ios::out);
+			file.close();
+		}
+	}
+	else {
+		/* clean viewpoints file */
+		for(int i=1; i<maxID; i++) {
+			file.open((pkgPath+"/viewpoints/viewpoint_"+std::to_string(i)+".txt").c_str(), std::ios::out);
+			file.close();
+		}
+	}
+	
+	if(VP) {
+	delete[] VP;
+	}
+#ifdef USE_FIXEDWING_MODEL
+	VP = new StateVector[2*maxID];
+	/* load lookup table */
+	std::fstream lookupFile;
+	lookupFile.open((pkgPath+"/lookupTable/lookupTable50x50.txt").c_str(), std::ios::in);
+	lookupTable = new double*[LOOKUPTABLE_SIZE];
+	for (int i = 0; i<LOOKUPTABLE_SIZE; i++) {
+		lookupTable[i] = new double[LOOKUPTABLE_SIZE];
+		for (int j = 0; j<LOOKUPTABLE_SIZE; j++) {
+			lookupFile >> lookupTable[i][j];
+		}
+	}
+#else
+	VP = new StateVector[maxID];
+#endif
+	if(reinitRRTs==NULL)
+		reinitRRTs = new int[maxID];
+	for(int q = 0; q<maxID; q++) {
+		reinitRRTs[q] = 1;
 	}
 	
 	ROS_INFO("Start AGP");
@@ -745,22 +588,6 @@ bool viewpointsGenerator(koptplanner::inspection::Request  &req, koptplanner::in
 			file << std::to_string(0.0)+"\t";
 			file << std::to_string(0.0)+"\t";
 			file << std::to_string(gVect[j][3])+"\n";
-
-// If orientation saved as Quaternion
-/*
-#if DIMENSIONALITY>4
-			tf::Quaternion q = tf::createQuaternionFromRPY(gVect[j][3],gVect[j][4],gVect[j][5]);
-#else
-			tf::Quaternion q = tf::createQuaternionFromRPY(0,0,gVect[j][3]);
-#endif
-			file << std::to_string(gVect[j][0])+"\t";
-			file << std::to_string(gVect[j][1])+"\t";
-			file << std::to_string(gVect[j][2])+"\t";
-			file << std::to_string(q.x())+"\t";
-			file << std::to_string(q.y())+"\t";
-			file << std::to_string(q.z())+"\t";
-			file << std::to_string(q.w())+"\n";
-*/
 			file.close();
 		}
 		gVect.clear();
@@ -788,308 +615,14 @@ bool viewpointsGenerator(koptplanner::inspection::Request  &req, koptplanner::in
 		delete (*it);
 	tri.clear();
 	
-	clean();
-	
-	sleep_time = 0.005;
-		
-	return koptError == SUCCESSFUL;
-}
-
-// Euclidean distance between obstacle center and VP
-bool inClickedObstacle(StateVector VPtmp) {
-	return sqrt(SQ(VPtmp[0]-sys_t::obstacles.front()->center[0]) +
-				SQ(VPtmp[1]-sys_t::obstacles.front()->center[1]) +
-				SQ(VPtmp[2]-sys_t::obstacles.front()->center[2])) > sys_t::obstacles.front()->size[0]+g_security_distance;
-}
-
-void viewpointReaderFile(int VP_id) {
-	bool VP_OK = false;
-	std::string line;
-	StateVector VPtmp;
-
-	file.open((pkgPath+"/viewpoints/viewpoint_"+std::to_string(VP_id)+".txt").c_str());
-	if (file.is_open())	{
-		while(!VP_OK && getline(file,line)) {
-			std::vector<std::string> pose;
-			boost::split(pose, line, boost::is_any_of("\t"));
-
-			// StateVector for Rotorcraft = [x,y,z,yaw]
-			VPtmp[0] = std::atof(pose[0].c_str());
-			VPtmp[1] = std::atof(pose[1].c_str());
-			VPtmp[2] = std::atof(pose[2].c_str());
-			VPtmp[3] = std::atof(pose[5].c_str());
-									
-			VP_OK = inClickedObstacle(VPtmp);
-		}
-		file.close();
-		
-		if(VP_OK) {
-			// VP = global variable
-			VP[VP_id][0] = VPtmp[0];
-			VP[VP_id][1] = VPtmp[1];
-			VP[VP_id][2] = VPtmp[2];
-			VP[VP_id][3] = VPtmp[3];
-			
-			publishViewpoint(VPtmp, VP_id, 0.0);
-		}
-		else {
-			ROS_ERROR("No collision free viewpoint for triangle %d", VP_id);
-			listKO.push_back(VP_id);
-			VP[VP_id][0] = sys_t::obstacles.front()->center[0];
-			VP[VP_id][1] = sys_t::obstacles.front()->center[1];
-			VP[VP_id][2] = sys_t::obstacles.front()->center[2];
-			VP[VP_id][3] = 0.0;
-			ROS_INFO("VP= x:%f, y:%f, z:%f (Center of the obstacle)", VP[VP_id][0], VP[VP_id][1], VP[VP_id][2]);
-			//ros::shutdown();
-		}		
-	}
-	else {
-		ROS_ERROR("Viewpoint %d file not found", VP_id);
-	}
-}
-
-bool isTriangleVisible(double xmin, double ymin, double zmin, double xmax, double ymax, double zmax) {
-
-	double x_obsEdge1 = sys_t::obstacles.front()->center[0]-0.5*sys_t::obstacles.front()->size[0]-g_security_distance;
-	double x_obsEdge2 = sys_t::obstacles.front()->center[0]+0.5*sys_t::obstacles.front()->size[0]+g_security_distance;
-	
-	double y_obsEdge1 = sys_t::obstacles.front()->center[1]-0.5*sys_t::obstacles.front()->size[1]-g_security_distance;
-	double y_obsEdge2 = sys_t::obstacles.front()->center[1]+0.5*sys_t::obstacles.front()->size[1]+g_security_distance;
-	
-	double z_obsEdge1 = sys_t::obstacles.front()->center[2]-0.5*sys_t::obstacles.front()->size[2]-g_security_distance;
-	double z_obsEdge2 = sys_t::obstacles.front()->center[2]+0.5*sys_t::obstacles.front()->size[2]+g_security_distance;
-	
-	return (x_obsEdge1 < xmin && x_obsEdge2 < xmin || x_obsEdge1 > xmax && x_obsEdge2 > xmax ||
-			y_obsEdge1 < ymin && y_obsEdge2 < ymin || y_obsEdge1 > ymax && y_obsEdge2 > ymax ||
-			z_obsEdge1 < zmin && z_obsEdge2 < zmin || z_obsEdge1 > zmax && z_obsEdge2 > zmax);
-}
-
-void viewpointTriangleReaderFile(int VP_id) {
-	bool VP_OK = false;
-	std::string line;
-	StateVector VPtmp;
-	
-	std::vector<double> xs;
-	std::vector<double> ys;
-	std::vector<double> zs;
-	
-	if(VP_id > 0) {
-		xs = {(*mesh)[VP_id-1].poses[0].pose.position.x, (*mesh)[VP_id-1].poses[1].pose.position.x, (*mesh)[VP_id-1].poses[2].pose.position.x};
-		ys = {(*mesh)[VP_id-1].poses[0].pose.position.y, (*mesh)[VP_id-1].poses[1].pose.position.y, (*mesh)[VP_id-1].poses[2].pose.position.y};
-		zs = {(*mesh)[VP_id-1].poses[0].pose.position.z, (*mesh)[VP_id-1].poses[1].pose.position.z, (*mesh)[VP_id-1].poses[2].pose.position.z};
-	}
-	
-	file.open((pkgPath+"/viewpoints/viewpoint_"+std::to_string(VP_id)+".txt").c_str());
-	if (file.is_open())	{
-		while(!VP_OK && getline(file,line)) {
-			std::vector<std::string> pose;
-			boost::split(pose, line, boost::is_any_of("\t"));
-
-			// StateVector for Rotorcraft = [x,y,z,yaw]
-			VPtmp[0] = std::atof(pose[0].c_str());
-			VPtmp[1] = std::atof(pose[1].c_str());
-			VPtmp[2] = std::atof(pose[2].c_str());
-			VPtmp[3] = std::atof(pose[5].c_str());			
-
-			xs.push_back(VPtmp[0]);
-			auto minmaxX = std::minmax_element(xs.begin(), xs.end());
- 
-			ys.push_back(VPtmp[1]);
-			auto minmaxY = std::minmax_element(ys.begin(), ys.end());
-			
-			zs.push_back(VPtmp[2]);
-			auto minmaxZ = std::minmax_element(zs.begin(), zs.end());
-			
-			VP_OK = isTriangleVisible(*minmaxX.first, *minmaxY.first, *minmaxZ.first, *minmaxX.second, *minmaxY.second, *minmaxZ.second);
-						
-			if(!VP_OK) {
-				xs.pop_back();
-				ys.pop_back();
-				zs.pop_back();
-			}
-		}
-		file.close();
-		
-		if(VP_OK) {
-			// VP = global variable
-			VP[VP_id][0] = VPtmp[0];
-			VP[VP_id][1] = VPtmp[1];
-			VP[VP_id][2] = VPtmp[2];
-			VP[VP_id][3] = VPtmp[3];
-			
-			publishViewpoint(VPtmp, VP_id, 0.0);
-		}
-		else {
-			ROS_ERROR("No collision free viewpoint for triangle %d", VP_id);
-			listKO.push_back(VP_id);
-			VP[VP_id][0] = sys_t::obstacles.front()->center[0];
-			VP[VP_id][1] = sys_t::obstacles.front()->center[1];
-			VP[VP_id][2] = sys_t::obstacles.front()->center[2];
-			VP[VP_id][3] = 0.0;
-			ROS_INFO("VP= x:%f, y:%f, z:%f (Center of the obstacle)", VP[VP_id][0], VP[VP_id][1], VP[VP_id][2]);
-			//ros::shutdown();
-		}		
-	}
-	else {
-		ROS_ERROR("Viewpoint %d file not found", VP_id);
-	}
-}
-
-void debugNoVP(std::vector<int> listKO) {
-	int next_id = 0;
-	std::string line;
-	
-	for(int i=0; i<listKO.size(); i++) {
-		file.open((pkgPath+"/viewpoints/viewpoint_"+std::to_string(listKO[i])+".txt").c_str());
-		if (file.is_open())	{
-			while(getline(file,line)) {
-				StateVector VPtmp;
-				std::vector<std::string> pose;
-				boost::split(pose, line, boost::is_any_of("\t"));
-
-				// StateVector for Rotorcraft = [x,y,z,yaw]
-				VPtmp[0] = std::atof(pose[0].c_str());
-				VPtmp[1] = std::atof(pose[1].c_str());
-				VPtmp[2] = std::atof(pose[2].c_str());
-				VPtmp[3] = std::atof(pose[5].c_str());
-
-				publishViewpoint(VPtmp, i*1000+next_id, float(i)/listKO.size());
-				next_id++;
-			}
-			file.close();
-		}
-		else
-			ROS_ERROR("File not found");
-	}
-	listKO.clear();
-}
-
-void planFromSavedVPs() {
-	if(!initOK) {
-		init();
-	}		
-	
-	/* ------------- TSP -------------- */
-#ifdef __TIMING_INFO__
-	timeval time;
-	gettimeofday(&time, NULL);
-	long millisecStart = time.tv_sec * 1000 + time.tv_usec / 1000;
-	time_start = millisecStart;
-	time_READ -= time.tv_sec * 1000000 + time.tv_usec;
-#endif
-	
-	double ** vals = new double* [maxID];
-	for(int i = 0; i<maxID; i++) {
-		vals[i] = new double[3];
-				
-		viewpointTriangleReaderFile(i);
-		
-		vals[i][0] = VP[i][0]*g_scale;
-		vals[i][1] = VP[i][1]*g_scale;
-		vals[i][2] = VP[i][2]*g_scale;
-	}
-	
-	debugNoVP(listKO);
-	listKO.clear();
-	
-#ifdef __TIMING_INFO__
-	gettimeofday(&time, NULL);
-	time_READ += time.tv_sec * 1000000 + time.tv_usec;
-#endif
-	
-	/* use provided interface of the TSP solver */
-	std::string params = "MOVE_TYPE=5\n";
-	params += "PRECISION=1\n";
-	params += "PATCHING_C=3\n";
-	params += "PATCHING_A=2\n";
-	params += "RUNS=1\n";
-	params += "TIME_LIMIT=5\n";
-	params += "TRACE_LEVEL=0\n";
-	params += "OUTPUT_TOUR_FILE=tempTour.txt\n";
-	params += "EOF";
-
-	std::string prob = "NAME:inspection\n";
-#ifdef USE_FIXEDWING_MODEL
-	prob += "TYPE:ATSP\n";
-	prob += "EDGE_WEIGHT_FORMAT:FULL_MATRIX\n";
-	prob += "EDGE_WEIGHT_TYPE:RRTFIXEDWING_3D\n";
-#else
-	prob += "TYPE:TSP\n";
-	prob += "EDGE_WEIGHT_TYPE:RRT_3D\n";
-#endif
-	std::stringstream ss; ss<<maxID;
-	prob += "DIMENSION:"+ss.str()+"\n";
-	prob += "NODE_COORD_SECTION\n";
-	prob += "EOF";
-#ifdef __TIMING_INFO__
-	gettimeofday(&time, NULL);
-	time_LKH -= time.tv_sec * 1000000 + time.tv_usec;
-#endif
-	size_t length = params.length();
-	char * par;
-	assert(par = (char*) malloc(length+10));
-	strcpy(par, params.c_str());
-	length = prob.length();
-	char * pro;
-	assert(pro = (char*) malloc(length+10));
-	strcpy(pro, prob.c_str());
-
-	/* call TSP solver */
-	ROS_INFO("Start LKH");
-	LKHmainFunction(maxID,vals,par,pro);
-	
-#ifdef __TIMING_INFO__
-	gettimeofday(&time, NULL);
-	time_LKH += time.tv_sec * 1000000 + time.tv_usec;
-#endif
-	for(int i = 0; i<maxID; i++) {
-      delete[] vals[i];
-	}
-	delete[] vals;
-	
-	file.open(g_tourlength.c_str(), std::ios::app | std::ios::out);
-	if(file.is_open()) {
-		file << "];\n";
-		gettimeofday(&time, NULL);
-		file << "timeEval = " << (int)((long)(time.tv_sec * 1000 + time.tv_usec / 1000) - millisecStart) << ";\n";
-#ifdef __TIMING_INFO__
-		file << "timeLKH = " << (int)(time_LKH/1000) << ";\n";
-		file << "timeRRTs = " << (int)(time_RRTS/1000) << ";\n";
-		file << "timeDistEval = " << (int)(time_RRTS_req/1000) << ";\n";
-		file << "timeDBS = " << (int)(time_DBS/1000) << ";\n";
-#endif
-		file.close();
-	}
-#ifdef __TIMING_INFO__
-	gettimeofday(&time, NULL);
-	ROS_INFO("Calculation time was:\t\t\t%i ms", (int)((long)(time.tv_sec * 1000 + time.tv_usec / 1000) - millisecStart));
-	ROS_INFO("Choice VPs time consumption:\t\t%i ms", (int)(time_READ/1000));
-	ROS_INFO("LKH time consumption:\t\t\t%i ms", (int)(time_LKH/1000));
-	ROS_INFO("Initial RRT* time consumption:\t\t%i ms", (int)(time_RRTS/1000));
-	ROS_INFO("Distance evaluation time:\t\t%i ms", (int)(time_RRTS_req/1000));
-#endif
-
-	for(int i = 0; i<maxID; i++)
-		delete plannerArray[i];
-	delete[] plannerArray;
-	delete[] reinitRRTs;
-	reinitRRTs = NULL;
-	
-	clean();
-}
-
-void clean() {
-	ROS_INFO("Variables cleaning");
-	// tidy up
-	if(!sys_t::obstacles.empty()) {
-		for(typename std::list<reg_t*>::iterator it = sys_t::obstacles.begin(); it != sys_t::obstacles.end(); it++)
-			delete (*it);
-		sys_t::obstacles.clear();
-	}
+	for(typename std::list<reg_t*>::iterator it = sys_t::obstacles.begin(); it != sys_t::obstacles.end(); it++)
+		delete (*it);
+	sys_t::obstacles.clear();
 	
 	delete[] VP;
 	VP = NULL;
-	maxID = count_files((pkgPath+"/viewpoints").c_str(), ".txt"); // Number of files in viewpoints
+	maxID = 0;
+
 	if(lookupTable) {
 		for(int i = 0; i < LOOKUPTABLE_SIZE; i++)
 			delete[] lookupTable[i];
@@ -1097,7 +630,9 @@ void clean() {
 		lookupTable = NULL;
 	}
 	plannerArrayBool = false;
-	initOK = false;
+	tri_t::initialized = false;
+			
+	return koptError == SUCCESSFUL;
 }
 
 void readSTLfile(std::string name) {

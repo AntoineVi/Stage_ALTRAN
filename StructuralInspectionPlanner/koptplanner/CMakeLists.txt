@@ -69,6 +69,7 @@ include_directories(
   include/planner_rrts
   include/LKH-2.0.7/SRC
   include/LKH-2.0.7/SRC/INCLUDE
+  include/octree_code
   ${catkin_INCLUDE_DIRS}
   ${Eigen_INCLUDE_DIRS}
 )
@@ -290,6 +291,114 @@ add_executable(viewpoints_generator
   include/LKH-2.0.7/SRC/WriteTour.c
 )
 
+add_executable(avoidObstacle
+  src/avoidObstacle.cpp
+  src/ptpPlanner.cpp
+  src/Rotorcraft.cpp
+  src/FixedWing.cpp
+  src/system_holonomic.cpp
+  include/planner_rrts/kdtree.c
+  include/LKH-2.0.7/SRC/LKHmain.c
+  include/LKH-2.0.7/SRC/Activate.c
+  include/LKH-2.0.7/SRC/AddCandidate.c
+  include/LKH-2.0.7/SRC/AddExtraCandidates.c
+  include/LKH-2.0.7/SRC/AddTourCandidates.c
+  include/LKH-2.0.7/SRC/AdjustCandidateSet.c
+  include/LKH-2.0.7/SRC/AllocateStructures.c
+  include/LKH-2.0.7/SRC/Ascent.c
+  include/LKH-2.0.7/SRC/Best2OptMove.c
+  include/LKH-2.0.7/SRC/Best3OptMove.c
+  include/LKH-2.0.7/SRC/Best4OptMove.c
+  include/LKH-2.0.7/SRC/Best5OptMove.c
+  include/LKH-2.0.7/SRC/BestKOptMove.c
+  include/LKH-2.0.7/SRC/Between.c
+  include/LKH-2.0.7/SRC/Between_SL.c
+  include/LKH-2.0.7/SRC/Between_SSL.c
+  include/LKH-2.0.7/SRC/BridgeGain.c
+  include/LKH-2.0.7/SRC/BuildKDTree.c
+  include/LKH-2.0.7/SRC/C.c
+  include/LKH-2.0.7/SRC/CandidateReport.c
+  include/LKH-2.0.7/SRC/ChooseInitialTour.c
+  include/LKH-2.0.7/SRC/Connect.c
+  include/LKH-2.0.7/SRC/CreateCandidateSet.c
+  include/LKH-2.0.7/SRC/CreateDelaunayCandidateSet.c
+  include/LKH-2.0.7/SRC/CreateQuadrantCandidateSet.c
+  include/LKH-2.0.7/SRC/Delaunay.c
+  include/LKH-2.0.7/SRC/Distance.c
+  include/LKH-2.0.7/SRC/Distance_SPECIAL.c
+  include/LKH-2.0.7/SRC/eprintf.c
+  include/LKH-2.0.7/SRC/ERXT.c
+  include/LKH-2.0.7/SRC/Excludable.c
+  include/LKH-2.0.7/SRC/Exclude.c
+  include/LKH-2.0.7/SRC/FindTour.c
+  include/LKH-2.0.7/SRC/Flip.c
+  include/LKH-2.0.7/SRC/Flip_SL.c
+  include/LKH-2.0.7/SRC/Flip_SSL.c
+  include/LKH-2.0.7/SRC/Forbidden.c
+  include/LKH-2.0.7/SRC/FreeStructures.c
+  include/LKH-2.0.7/SRC/fscanint.c
+  include/LKH-2.0.7/SRC/Gain23.c
+  include/LKH-2.0.7/SRC/GenerateCandidates.c
+  include/LKH-2.0.7/SRC/Genetic.c
+  include/LKH-2.0.7/SRC/GeoConversion.c
+  include/LKH-2.0.7/SRC/GetTime.c
+  include/LKH-2.0.7/SRC/GreedyTour.c
+  include/LKH-2.0.7/SRC/Hashing.c
+  include/LKH-2.0.7/SRC/Heap.c
+  include/LKH-2.0.7/SRC/IsCandidate.c
+  include/LKH-2.0.7/SRC/IsCommonEdge.c
+  include/LKH-2.0.7/SRC/IsPossibleCandidate.c
+  include/LKH-2.0.7/SRC/KSwapKick.c
+  include/LKH-2.0.7/SRC/LinKernighan.c
+  include/LKH-2.0.7/SRC/Make2OptMove.c
+  include/LKH-2.0.7/SRC/Make3OptMove.c
+  include/LKH-2.0.7/SRC/Make4OptMove.c
+  include/LKH-2.0.7/SRC/Make5OptMove.c
+  include/LKH-2.0.7/SRC/MakeKOptMove.c
+  include/LKH-2.0.7/SRC/MergeBetterTourWithBestTour.c
+  include/LKH-2.0.7/SRC/MergeWithTour.c
+  include/LKH-2.0.7/SRC/Minimum1TreeCost.c
+  include/LKH-2.0.7/SRC/MinimumSpanningTree.c
+  include/LKH-2.0.7/SRC/NormalizeNodeList.c
+  include/LKH-2.0.7/SRC/NormalizeSegmentList.c
+  include/LKH-2.0.7/SRC/OrderCandidateSet.c
+  include/LKH-2.0.7/SRC/PatchCycles.c
+  include/LKH-2.0.7/SRC/printff.c
+  include/LKH-2.0.7/SRC/PrintParameters.c
+  include/LKH-2.0.7/SRC/qsort.c
+  include/LKH-2.0.7/SRC/Random.c
+  include/LKH-2.0.7/SRC/ReadCandidates.c
+  include/LKH-2.0.7/SRC/ReadLine.c
+  include/LKH-2.0.7/SRC/ReadParametersInsp.c
+  include/LKH-2.0.7/SRC/ReadPenalties.c
+  include/LKH-2.0.7/SRC/ReadProblemInsp.c
+  include/LKH-2.0.7/SRC/RecordBestTour.c
+  include/LKH-2.0.7/SRC/RecordBetterTour.c
+  include/LKH-2.0.7/SRC/RemoveFirstActive.c
+  include/LKH-2.0.7/SRC/ResetCandidateSet.c
+  include/LKH-2.0.7/SRC/RestoreTour.c
+  include/LKH-2.0.7/SRC/SegmentSize.c
+  include/LKH-2.0.7/SRC/Sequence.c
+  include/LKH-2.0.7/SRC/SFCTour.c
+  include/LKH-2.0.7/SRC/SolveCompressedSubproblem.c
+  include/LKH-2.0.7/SRC/SolveDelaunaySubproblems.c
+  include/LKH-2.0.7/SRC/SolveKarpSubproblems.c
+  include/LKH-2.0.7/SRC/SolveKCenterSubproblems.c
+  include/LKH-2.0.7/SRC/SolveKMeansSubproblems.c
+  include/LKH-2.0.7/SRC/SolveRoheSubproblems.c
+  include/LKH-2.0.7/SRC/SolveSFCSubproblems.c
+  include/LKH-2.0.7/SRC/SolveSubproblem.c
+  include/LKH-2.0.7/SRC/SolveSubproblemBorderProblems.c
+  include/LKH-2.0.7/SRC/SolveTourSegmentSubproblems.c
+  include/LKH-2.0.7/SRC/Statistics.c
+  include/LKH-2.0.7/SRC/StoreTour.c
+  include/LKH-2.0.7/SRC/SymmetrizeCandidateSet.c
+  include/LKH-2.0.7/SRC/TrimCandidateSet.c
+  include/LKH-2.0.7/SRC/WriteCandidates.c
+  include/LKH-2.0.7/SRC/WritePenalties.c
+  include/LKH-2.0.7/SRC/WriteTour.c
+)
+
 ## Specify libraries to link a library or executable target against
 target_link_libraries(plan
   ${optec_LIBRARIES}
@@ -297,6 +406,11 @@ target_link_libraries(plan
 )
 
 target_link_libraries(viewpoints_generator
+  ${optec_LIBRARIES}
+  ${catkin_LIBRARIES}
+)
+
+target_link_libraries(avoidObstacle
   ${optec_LIBRARIES}
   ${catkin_LIBRARIES}
 )
