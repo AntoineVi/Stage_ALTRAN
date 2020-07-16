@@ -39,11 +39,12 @@
 #include <map>
 
 #ifdef __TIMING_INFO__
- long time_DBS;
- long time_RRTS;
- long time_RRTS_req;
- long time_LKH;
- long time_READ;
+	long time_DBS;
+	long time_RRTS;
+	long time_RRTS_req;
+	long time_LKH;
+	long time_READ;
+	long time_CHANGE_PATH;
 #endif
 long time_start;
 long millisecStart;
@@ -159,7 +160,7 @@ int main(int argc, char **argv)
 	obsBoxSize = 50;
 	pkgPath = ros::package::getPath("koptplanner");
 	g_security_distance = 5.0;
-	octreeSize = 32;
+	octreeSize = 256;
 	
 	mesh = readSTLfile(ros::package::getPath("request")+"/meshes/asciiavion.stl");
 	octree = new Octree<std::vector<int>>(octreeSize);
@@ -272,8 +273,10 @@ void readPath() {
 			fillOctree(poseTmp.header.seq, stateVP);
 		}
 	}
-	else
-		ROS_ERROR("Error on path file");		
+	else {
+		ROS_ERROR("Error on path file");
+		ros::shutdown();
+	}
 	file.close();
 }
 
@@ -313,12 +316,14 @@ void setupSystem() {
 	ROS_INFO("Initialisation");
 	
 	// Problem setup with the last calculated path from tour.txt file
-	sleep_time = 0.01;
+	// TODO
+	/*sleep_time = 0.01;
 	//sleep_time = 0.0;
 	obsBoxSize = 50;
 	pkgPath = ros::package::getPath("koptplanner");
 	g_security_distance = 5.0;
-	octreeSize = 32;
+	octreeSize = 32;*/
+	
 	
 	if(mesh == NULL)
 		mesh = readSTLfile(ros::package::getPath("request")+"/meshes/asciiavion.stl");
@@ -336,10 +341,10 @@ void setupSystem() {
 	res_g = new koptplanner::inspection::Response();
 
 	// static function variable reset variables:
-	Gain23Static = 1;
-	GreedyTourmark = 1;
-	SFCTourRank = 1;
-	ReadPenaltiesStatic = 1;
+	Gain23Static = 0;
+	GreedyTourmark = 0;
+	SFCTourRank = 0;
+	ReadPenaltiesStatic = 0;
 	
 	/* loading the parameters */
 #ifdef USE_FIXEDWING_MODEL
@@ -432,6 +437,7 @@ void setupSystem() {
 	time_RRTS_req = 0;
 	time_LKH = 0;
 	time_READ = 0;
+	time_CHANGE_PATH = 0;
 #endif
 	time_start = 0;
 	
@@ -556,7 +562,7 @@ void planForHiddenTrangles() {
 			vals[i][1] = VP[i][1]*g_scale;
 			vals[i][2] = VP[i][2]*g_scale;
 			
-			ROS_INFO("id:%d, x:%f, y:%f, z:%f",listKO[i], VP[i][0], VP[i][1], VP[i][2]);
+			//ROS_INFO("idListKO:%d, idVP:%d, x:%f, y:%f, z:%f",i, listKO[i], VP[i][0], VP[i][1], VP[i][2]);
 		}
 	
 #ifdef __TIMING_INFO__
@@ -607,8 +613,15 @@ void planForHiddenTrangles() {
 #ifdef __TIMING_INFO__
 		gettimeofday(&time, NULL);
 		time_LKH += time.tv_sec * 1000000 + time.tv_usec;
+		time_CHANGE_PATH -= time.tv_sec * 1000000 + time.tv_usec;
 #endif
+
 		changeInspectionPath();
+		
+#ifdef __TIMING_INFO__
+		gettimeofday(&time, NULL);
+		time_CHANGE_PATH += time.tv_sec * 1000000 + time.tv_usec;
+#endif
 		
 		for(int i = 0; i<maxID; i++) {
 		  delete[] vals[i];
@@ -623,14 +636,14 @@ void planForHiddenTrangles() {
 	ROS_INFO("Calculation time was:\t\t\t%i ms", (int)((long)(time.tv_sec * 1000 + time.tv_usec / 1000) - millisecStart));
 	ROS_INFO("Choice VPs time consumption:\t\t%i ms", (int)(time_READ/1000));
 	ROS_INFO("LKH time consumption:\t\t\t%i ms", (int)(time_LKH/1000));
+	ROS_INFO("Change of path time consumption:\t%i ms", (int)(time_CHANGE_PATH/1000));
 	ROS_INFO("Initial RRT* time consumption:\t\t%i ms", (int)(time_RRTS/1000));
 	ROS_INFO("Distance evaluation time:\t\t%i ms", (int)(time_RRTS_req/1000));
 #endif
 	
-	//changeInspectionPath(); //TODO
 	checkNewTourFile();
+	publishPath();
 	cleanVariables();
-	//publishPath();
 }
 
 bool isTriangleVisible(double xmin, double ymin, double zmin, double xmax, double ymax, double zmax) {
@@ -699,6 +712,7 @@ void selectViewpointFromFile(int VP_id, int VPKO_id) {
 	}
 	else {
 		ROS_ERROR("Viewpoint %d file not found", VP_id);
+		ros::shutdown();
 	}
 }
 
@@ -717,50 +731,55 @@ void changeInspectionPath() {
 				tf::poseMsgToTF(it_path->pose, pose);
 			
 				file << it_path->header.seq << "\t";
-				file << std::setprecision(10) << it_path->pose.position.x << "\t"; 
-				file << std::setprecision(10) << it_path->pose.position.y << "\t";
-				file << std::setprecision(10) << it_path->pose.position.z << "\t";
-				file << "0\t0\t" << std::setprecision(10) << tf::getYaw(pose.getRotation()) << "\n";
+				file << std::setprecision(9) << it_path->pose.position.x << "\t"; 
+				file << std::setprecision(9) << it_path->pose.position.y << "\t";
+				file << std::setprecision(9) << it_path->pose.position.z << "\t";
+				file << "0\t0\t" << std::setprecision(9) << tf::getYaw(pose.getRotation()) << "\n";
 			}
-			else if(!addedPath) {	
+			else if(!addedPath) {
 				if((int) res_g->inspectionPath.poses.size() == maxID*2) {
-						std::string line;
-						std::fstream fileTour;
-						int VP_id;
-						int i = 0;
+					int i;
+					for(std::vector<geometry_msgs::PoseStamped>::iterator it = res_g->inspectionPath.poses.begin(); it != res_g->inspectionPath.poses.end(); it+=2) {
+						for(i=0; i<maxID; i++) {
+							tf::Pose pose;
+							tf::poseMsgToTF(it->pose, pose);
 						
-						fileTour.open((pkgPath+"/data/tempTour.txt").c_str(), std::ios::in);
-						if(fileTour.is_open())	{
-							while(getline(fileTour,line)) {
-								if(line.find("NAME") == std::string::npos && line.find("COMMENT") == std::string::npos && line.find("TYPE") == std::string::npos && line.find("DIMENSION") == std::string::npos && line.find("TOUR_SECTION") == std::string::npos && line.find("-1") == std::string::npos && line.find("EOF") == std::string::npos) {
-									
-									VP_id = std::atoi(line.c_str())-1;					
-									
-									tf::Pose pose;
-									tf::poseMsgToTF(res_g->inspectionPath.poses[i].pose, pose);
-					
-									file << listKO[VP_id] << "\t";
-									file << std::setprecision(10) << res_g->inspectionPath.poses[i].pose.position.x << "\t";
-									file << std::setprecision(10) << res_g->inspectionPath.poses[i].pose.position.y << "\t";
-									file << std::setprecision(10) << res_g->inspectionPath.poses[i].pose.position.z << "\t";
-									file << "0\t0\t" << std::setprecision(10) << tf::getYaw(pose.getRotation()) << "\n";
-									i += 2;
-								}
-							}		
+							//ROS_INFO("delta: x:%f, y:%f, z:%f, yaw:%f", std::fabs(VP[i][0] - it->pose.position.x), std::fabs(VP[i][1] - it->pose.position.y), std::fabs(VP[i][2] - it->pose.position.z), std::fabs(VP[i][3] - tf::getYaw(pose.getRotation())));
+						
+							if(	std::fabs(VP[i][0] - it->pose.position.x) < 0.0001 &&
+								std::fabs(VP[i][1] - it->pose.position.y) < 0.0001 &&
+								std::fabs(VP[i][2] - it->pose.position.z) < 0.0001 &&
+								std::fabs(VP[i][3] - tf::getYaw(pose.getRotation())) < 0.001) {
+								
+								file << listKO[i] << "\t";
+								file << std::setprecision(9) << it->pose.position.x << "\t";
+								file << std::setprecision(9) << it->pose.position.y << "\t";
+								file << std::setprecision(9) << it->pose.position.z << "\t";
+								file << "0\t0\t" << std::setprecision(9) << tf::getYaw(pose.getRotation()) << "\n";
+								break;
+							}
 						}
-						else
-							ROS_ERROR("LKH tempTour file not found!");
-						fileTour.close();
+						if(i == maxID) {
+							ROS_ERROR("Matching problem between VP IDs and configuration!");
+							generateNewTourFile();
+							ros::shutdown();
+						}
+					}
 				}
-				else
-					ROS_ERROR("Problem with LKH !");
+				else {
+					ROS_ERROR("Problem with LKH!");
+					generateNewTourFile();
+					ros::shutdown();
+				}
 				addedPath = true;
 			}
 		}
 		file.close();
 	}
-	else
+	else {
 		ROS_ERROR("Can't open tour.txt file");
+		ros::shutdown();
+	}
 }
 
 void cleanVariables() {
@@ -930,7 +949,7 @@ void publishPath() {
 		stateVP[1] = path[i].pose.position.y;
 		stateVP[2] = path[i].pose.position.z;
 		stateVP[3] = tf::getYaw(pose.getRotation());
-		//publishViewpoint(stateVP, path[i].header.seq, 0);
+		publishViewpoint(stateVP, path[i].header.seq, 0);
 	}
 	
 	// End point
@@ -1007,8 +1026,10 @@ void checkNewTourFile() {
 					}
 				}
 			}
-			else
+			else {
 				ROS_ERROR("viewpoint file not found!");
+				ros::shutdown();
+			}
 			fileVP.close();
 			
 			if(!OK)
@@ -1016,8 +1037,10 @@ void checkNewTourFile() {
 			OK = false;
 		}	
 	}
-	else
-		ROS_ERROR("tour file not found!");	file.close();	
+	else {
+		ROS_ERROR("tour file not found!");	file.close();
+		ros::shutdown();
+	}	
 	file.close();
 }
 
@@ -1042,18 +1065,24 @@ void generateNewTourFile() {
 						getline(fileVP,lineVP);
 						fileTour << line << "\t" << lineVP << "\n";
 					}
-					else
+					else {
 						ROS_ERROR("viewpoint file not found!");
+						ros::shutdown();
+					}
 					fileVP.close();
 				}
 			}		
 		}
-		else
+		else {
 			ROS_ERROR("tempTourSave file not found!");
+			ros::shutdown();
+		}
 		file.close();
 	}
-	else
+	else {
 		ROS_ERROR("tour file not found!");	file.close();	
+		ros::shutdown();
+	}
 	fileTour.close();
 }
 
