@@ -108,11 +108,12 @@ ros::Subscriber clickedPoint_sub;
 std::vector<nav_msgs::Path>* mesh = NULL;
 
 bool endPoint;
-double scaleVP;
 std::vector<double> spaceSize = {1000.0, 1000.0, 1000.0};
 std::vector<double> spaceCenter = {0.0, 0.0, 0.0};
 
 Octree<std::vector<int>>* octree = NULL;
+
+double threshold = 0.0001;
 double xmin_obs;
 double xmax_obs;
 double ymin_obs;
@@ -126,14 +127,14 @@ int octreeSize;
 
 std::vector<nav_msgs::Path>* readSTLfile(std::string name);
 void publishStl();
-void publishViewpoint(StateVector stateVP, int VP_id, double blue);
+void publishViewpoint(geometry_msgs::PoseStamped vp);
 void publishPath();
 
 void poseObstacle(const geometry_msgs::PointStamped& clicked_pose);
 void planForHiddenTrangles();
 void setupSystem();
 void readPath();
-void fillOctree(int VP_id, StateVector vp);
+void fillOctree(geometry_msgs::PoseStamped vp);
 void selectViewpointFromFile(int VP_id, int VPKO_id);
 bool isTriangleVisible(double xmin, double ymin, double zmin, double xmax, double ymax, double zmax);
 void changeInspectionPath();
@@ -153,6 +154,8 @@ int main(int argc, char **argv)
 	stl_pub = n.advertise<nav_msgs::Path>("stl_mesh", 1);
 
 	clickedPoint_sub = n.subscribe("clicked_point", 1, poseObstacle);
+
+	generateNewTourFile();
 	
 	// Problem setup with the last calculated path from tour.txt file
 	sleep_time = 0.01;
@@ -160,7 +163,7 @@ int main(int argc, char **argv)
 	obsBoxSize = 50;
 	pkgPath = ros::package::getPath("koptplanner");
 	g_security_distance = 5.0;
-	octreeSize = 256;
+	octreeSize = 64;
 	
 	mesh = readSTLfile(ros::package::getPath("request")+"/meshes/asciiavion.stl");
 	octree = new Octree<std::vector<int>>(octreeSize);
@@ -169,10 +172,46 @@ int main(int argc, char **argv)
 
 	ROS_INFO("Ready to receive obstacle pose from Publish point on RVIZ");
 	
-	//generateNewTourFile();
-	
 	ros::spin();
 
+	geometry_msgs::PoseStamped tmpPose;			
+			
+	tmpPose.header.seq = 1;
+	tmpPose.header.stamp = ros::Time::now();
+	tmpPose.header.frame_id = "/kopt_frame";
+	
+	tmpPose.pose.position.x = 0;
+	tmpPose.pose.position.y = 0;
+	tmpPose.pose.position.z = 0;
+	//0	0	1	7.54979e-08
+	tmpPose.pose.orientation.x = 0;
+	tmpPose.pose.orientation.y = -0;
+	tmpPose.pose.orientation.z = -1;
+	tmpPose.pose.orientation.w = -4.371139e-08;
+
+	tf::Pose pose;
+	tf::poseMsgToTF(tmpPose.pose, pose);
+	tf::Matrix3x3 m(pose.getRotation());
+	double roll, pitch, yaw;
+	m.getRPY(roll, pitch, yaw);	
+	
+	geometry_msgs::PoseStamped tmpPose2;			
+			
+	tmpPose.header.seq = 2;
+	tmpPose.header.stamp = ros::Time::now();
+	tmpPose.header.frame_id = "/kopt_frame";
+	
+	tmpPose.pose.position.x = 0;
+	tmpPose.pose.position.y = 0;
+	tmpPose.pose.position.z = 0;
+	tf::Quaternion q2 = tf::createQuaternionFromRPY(roll, pitch, yaw);
+	tmpPose.pose.orientation.x = q2.x();
+	tmpPose.pose.orientation.y = q2.y();
+	tmpPose.pose.orientation.z = q2.z();
+	tmpPose.pose.orientation.w = q2.w();
+
+	ROS_INFO("Quat1:%f,%f,%f,%f, Quat2:%f,%f,%f,%f", tmpPose.pose.orientation.x, tmpPose.pose.orientation.y, tmpPose.pose.orientation.z, tmpPose.pose.orientation.w, tmpPose2.pose.orientation.x, tmpPose2.pose.orientation.y, tmpPose2.pose.orientation.z, tmpPose2.pose.orientation.w);	
+	
 	return 0;
 }
 
@@ -245,32 +284,26 @@ void readPath() {
 	if (file.is_open())	{
 		while(getline(file,line)) {
 			// Fill vector<VPconfig>
-			geometry_msgs::PoseStamped poseTmp;			
+			geometry_msgs::PoseStamped tmpPose;			
 			std::vector<std::string> poseStr;
 			
 			boost::split(poseStr, line, boost::is_any_of("\t"));
 			
-			poseTmp.header.seq = std::atoi(poseStr[0].c_str());
-			poseTmp.header.stamp = ros::Time::now();
-			poseTmp.header.frame_id = "/kopt_frame";
+			tmpPose.header.seq = std::atoi(poseStr[0].c_str());
+			tmpPose.header.stamp = ros::Time::now();
+			tmpPose.header.frame_id = "/kopt_frame";
 			
-			poseTmp.pose.position.x = std::atof(poseStr[1].c_str());
-			poseTmp.pose.position.y = std::atof(poseStr[2].c_str());
-			poseTmp.pose.position.z = std::atof(poseStr[3].c_str());			
-			tf::Quaternion q = tf::createQuaternionFromRPY(std::atof(poseStr[4].c_str()),std::atof(poseStr[5].c_str()),std::atof(poseStr[6].c_str()));
-			poseTmp.pose.orientation.x = q.x();
-			poseTmp.pose.orientation.y = q.y();
-			poseTmp.pose.orientation.z = q.z();
-			poseTmp.pose.orientation.w = q.w();
+			tmpPose.pose.position.x = std::atof(poseStr[1].c_str());
+			tmpPose.pose.position.y = std::atof(poseStr[2].c_str());
+			tmpPose.pose.position.z = std::atof(poseStr[3].c_str());
+			tmpPose.pose.orientation.x = std::atof(poseStr[4].c_str());
+			tmpPose.pose.orientation.y = std::atof(poseStr[5].c_str());
+			tmpPose.pose.orientation.z = std::atof(poseStr[6].c_str());
+			tmpPose.pose.orientation.w = std::atof(poseStr[7].c_str());
 			
-			path.push_back(poseTmp);			
+			path.push_back(tmpPose);			
 			// Fill octree
-			StateVector stateVP;
-			stateVP[0] = poseTmp.pose.position.x;
-			stateVP[1] = poseTmp.pose.position.y;
-			stateVP[2] = poseTmp.pose.position.z;
-			stateVP[3] = std::atof(poseStr[6].c_str());
-			fillOctree(poseTmp.header.seq, stateVP);
+			fillOctree(tmpPose);
 		}
 	}
 	else {
@@ -281,21 +314,32 @@ void readPath() {
 }
 
 // Add id of the viewpoint in each cube between the viewpoint and the observed triangle
-void fillOctree(int VP_id, StateVector vp) {
+void fillOctree(geometry_msgs::PoseStamped vp) {
 	std::vector<double> xs;
 	std::vector<double> ys;
 	std::vector<double> zs;
 	
 	// VP_id=0 <=> Start point => No triangle to inspect
-	if(VP_id > 0) {
-		xs = {(*mesh)[VP_id-1].poses[0].pose.position.x, (*mesh)[VP_id-1].poses[1].pose.position.x, (*mesh)[VP_id-1].poses[2].pose.position.x, vp[0]};
-		ys = {(*mesh)[VP_id-1].poses[0].pose.position.y, (*mesh)[VP_id-1].poses[1].pose.position.y, (*mesh)[VP_id-1].poses[2].pose.position.y, vp[1]};
-		zs = {(*mesh)[VP_id-1].poses[0].pose.position.z, (*mesh)[VP_id-1].poses[1].pose.position.z, (*mesh)[VP_id-1].poses[2].pose.position.z, vp[2]};
+	if(vp.header.seq > 0) {
+		xs = {	(*mesh)[vp.header.seq-1].poses[0].pose.position.x,
+				(*mesh)[vp.header.seq-1].poses[1].pose.position.x,
+				(*mesh)[vp.header.seq-1].poses[2].pose.position.x,
+				vp.pose.position.x};
+				
+		ys = {	(*mesh)[vp.header.seq-1].poses[0].pose.position.y,
+				(*mesh)[vp.header.seq-1].poses[1].pose.position.y,
+				(*mesh)[vp.header.seq-1].poses[2].pose.position.y,
+				vp.pose.position.y};
+				
+		zs = {	(*mesh)[vp.header.seq-1].poses[0].pose.position.z,
+				(*mesh)[vp.header.seq-1].poses[1].pose.position.z,
+				(*mesh)[vp.header.seq-1].poses[2].pose.position.z,
+				vp.pose.position.z};
 	}
 	else {
-		xs = {vp[0]};
-		ys = {vp[1]};
-		zs = {vp[2]};
+		xs = {vp.pose.position.x};
+		ys = {vp.pose.position.y};
+		zs = {vp.pose.position.z};
 	}		
 	
 	auto minmaxX = std::minmax_element(xs.begin(), xs.end());
@@ -306,7 +350,7 @@ void fillOctree(int VP_id, StateVector vp) {
 	for(int z=(int) (((double)*minmaxZ.first)*(octreeSize-1)/spaceSize[0]+(octreeSize-1)/2.0); z<=(int) (((double)*minmaxZ.second)*(octreeSize-1)/spaceSize[0]+(octreeSize-1)/2.0); z++) {
 		for(int y=(int) (((double)*minmaxY.first)*(octreeSize-1)/spaceSize[0]+(octreeSize-1)/2.0); y<=(int) (((double)*minmaxY.second)*(octreeSize-1)/spaceSize[0]+(octreeSize-1)/2.0); y++) {
 			for(int x=(int) (((double)*minmaxX.first)*(octreeSize-1)/spaceSize[0]+(octreeSize-1)/2.0); x<=(int) (((double)*minmaxX.second)*(octreeSize-1)/spaceSize[0]+(octreeSize-1)/2.0); x++) {
-				(*octree)(x,y,z).push_back(VP_id);
+				(*octree)(x,y,z).push_back(vp.header.seq);
 			}
 		}
 	}
@@ -322,7 +366,9 @@ void setupSystem() {
 	obsBoxSize = 50;
 	pkgPath = ros::package::getPath("koptplanner");
 	g_security_distance = 5.0;
-	octreeSize = 32;*/
+	octreeSize = 32;
+	scaleVP = sqrt(SQ(problemBoundary.size[0])+SQ(problemBoundary.size[1])+SQ(problemBoundary.size[2]))/70.0;
+	scaleVP/=1;	*/
 	
 	
 	if(mesh == NULL)
@@ -454,9 +500,6 @@ void setupSystem() {
 		delete[] lookupTable;
 		lookupTable = NULL;
 	}
-
-	scaleVP = sqrt(SQ(problemBoundary.size[0])+SQ(problemBoundary.size[1])+SQ(problemBoundary.size[2]))/70.0;
-	scaleVP/=1;	
 	
 	g_tourlength = pkgPath + "/data/tourlength.m";
 	file.open(g_tourlength.c_str(), std::ios::out);
@@ -616,6 +659,7 @@ void planForHiddenTrangles() {
 		time_CHANGE_PATH -= time.tv_sec * 1000000 + time.tv_usec;
 #endif
 
+		ROS_INFO("Change the path");
 		changeInspectionPath();
 		
 #ifdef __TIMING_INFO__
@@ -655,7 +699,7 @@ bool isTriangleVisible(double xmin, double ymin, double zmin, double xmax, doubl
 void selectViewpointFromFile(int VP_id, int VPKO_id) {
 	bool VP_OK = false;
 	std::string line;
-	StateVector VPtmp;
+	geometry_msgs::Pose VPtmp;
 	
 	std::vector<double> xs;
 	std::vector<double> ys;
@@ -674,18 +718,21 @@ void selectViewpointFromFile(int VP_id, int VPKO_id) {
 			boost::split(pose, line, boost::is_any_of("\t"));
 
 			// StateVector for Rotorcraft = [x,y,z,yaw]
-			VPtmp[0] = std::atof(pose[0].c_str());
-			VPtmp[1] = std::atof(pose[1].c_str());
-			VPtmp[2] = std::atof(pose[2].c_str());
-			VPtmp[3] = std::atof(pose[5].c_str());
+			VPtmp.position.x = std::atof(pose[0].c_str());
+			VPtmp.position.y = std::atof(pose[1].c_str());
+			VPtmp.position.z = std::atof(pose[2].c_str());
+			VPtmp.orientation.x = std::atof(pose[3].c_str());
+			VPtmp.orientation.y = std::atof(pose[4].c_str());
+			VPtmp.orientation.z = std::atof(pose[5].c_str());
+			VPtmp.orientation.w = std::atof(pose[6].c_str());
 			
-			xs.push_back(VPtmp[0]);
+			xs.push_back(VPtmp.position.x);
 			auto minmaxX = std::minmax_element(xs.begin(), xs.end());
  
-			ys.push_back(VPtmp[1]);
+			ys.push_back(VPtmp.position.y);
 			auto minmaxY = std::minmax_element(ys.begin(), ys.end());
 			
-			zs.push_back(VPtmp[2]);
+			zs.push_back(VPtmp.position.z);
 			auto minmaxZ = std::minmax_element(zs.begin(), zs.end());
 			
 			VP_OK = isTriangleVisible(*minmaxX.first, *minmaxY.first, *minmaxZ.first, *minmaxX.second, *minmaxY.second, *minmaxZ.second);
@@ -699,11 +746,14 @@ void selectViewpointFromFile(int VP_id, int VPKO_id) {
 		file.close();
 		
 		if(VP_OK) {
+			tf::Pose pose;
+			tf::poseMsgToTF(VPtmp, pose);
+		
 			// VP = global variable
-			VP[VPKO_id][0] = VPtmp[0];
-			VP[VPKO_id][1] = VPtmp[1];
-			VP[VPKO_id][2] = VPtmp[2];
-			VP[VPKO_id][3] = VPtmp[3];
+			VP[VPKO_id][0] = VPtmp.position.x;
+			VP[VPKO_id][1] = VPtmp.position.y;
+			VP[VPKO_id][2] = VPtmp.position.z;			
+			VP[VPKO_id][3] = tf::getYaw(pose.getRotation());
 		}
 		else {
 			ROS_ERROR("No collision free viewpoint for triangle %d", VP_id);
@@ -727,17 +777,17 @@ void changeInspectionPath() {
 	if(file.is_open()) {
 		for(std::vector<geometry_msgs::PoseStamped>::iterator it_path = std::begin(path); it_path != std::end(path); it_path++) {
 			if(std::find(listKO.begin(), listKO.end(), it_path->header.seq) == listKO.end()) {
-				tf::Pose pose;
-				tf::poseMsgToTF(it_path->pose, pose);
-			
 				file << it_path->header.seq << "\t";
-				file << std::setprecision(9) << it_path->pose.position.x << "\t"; 
-				file << std::setprecision(9) << it_path->pose.position.y << "\t";
-				file << std::setprecision(9) << it_path->pose.position.z << "\t";
-				file << "0\t0\t" << std::setprecision(9) << tf::getYaw(pose.getRotation()) << "\n";
+				file << std::setprecision(8) << it_path->pose.position.x << "\t"; 
+				file << std::setprecision(8) << it_path->pose.position.y << "\t";
+				file << std::setprecision(8) << it_path->pose.position.z << "\t";
+				file << std::setprecision(8) << it_path->pose.orientation.x << "\t";
+				file << std::setprecision(8) << it_path->pose.orientation.y << "\t";
+				file << std::setprecision(8) << it_path->pose.orientation.z << "\t";
+				file << std::setprecision(8) << it_path->pose.orientation.w << "\n";
 			}
 			else if(!addedPath) {
-				if((int) res_g->inspectionPath.poses.size() == maxID*2) {
+				if((int) res_g->inspectionPath.poses.size() == maxID*2) { //TODO
 					int i;
 					for(std::vector<geometry_msgs::PoseStamped>::iterator it = res_g->inspectionPath.poses.begin(); it != res_g->inspectionPath.poses.end(); it+=2) {
 						for(i=0; i<maxID; i++) {
@@ -746,22 +796,26 @@ void changeInspectionPath() {
 						
 							//ROS_INFO("delta: x:%f, y:%f, z:%f, yaw:%f", std::fabs(VP[i][0] - it->pose.position.x), std::fabs(VP[i][1] - it->pose.position.y), std::fabs(VP[i][2] - it->pose.position.z), std::fabs(VP[i][3] - tf::getYaw(pose.getRotation())));
 						
-							if(	std::fabs(VP[i][0] - it->pose.position.x) < 0.0001 &&
-								std::fabs(VP[i][1] - it->pose.position.y) < 0.0001 &&
-								std::fabs(VP[i][2] - it->pose.position.z) < 0.0001 &&
-								std::fabs(VP[i][3] - tf::getYaw(pose.getRotation())) < 0.001) {
+							if(	std::fabs(VP[i][0] - it->pose.position.x) < threshold &&
+								std::fabs(VP[i][1] - it->pose.position.y) < threshold &&
+								std::fabs(VP[i][2] - it->pose.position.z) < threshold &&
+								std::fabs(VP[i][3] - tf::getYaw(pose.getRotation())) < threshold) {
 								
 								file << listKO[i] << "\t";
-								file << std::setprecision(9) << it->pose.position.x << "\t";
-								file << std::setprecision(9) << it->pose.position.y << "\t";
-								file << std::setprecision(9) << it->pose.position.z << "\t";
-								file << "0\t0\t" << std::setprecision(9) << tf::getYaw(pose.getRotation()) << "\n";
+								file << std::setprecision(8) << it->pose.position.x << "\t";
+								file << std::setprecision(8) << it->pose.position.y << "\t";
+								file << std::setprecision(8) << it->pose.position.z << "\t";
+								file << std::setprecision(8) << it->pose.orientation.x << "\t";
+								file << std::setprecision(8) << it->pose.orientation.y << "\t";
+								file << std::setprecision(8) << it->pose.orientation.z << "\t";
+								file << std::setprecision(8) << it->pose.orientation.w << "\n";
 								break;
 							}
 						}
 						if(i == maxID) {
 							ROS_ERROR("Matching problem between VP IDs and configuration!");
 							generateNewTourFile();
+							ros::Duration(5.0).sleep();
 							ros::shutdown();
 						}
 					}
@@ -769,6 +823,7 @@ void changeInspectionPath() {
 				else {
 					ROS_ERROR("Problem with LKH!");
 					generateNewTourFile();
+					ros::Duration(5.0).sleep(); //TODO
 					ros::shutdown();
 				}
 				addedPath = true;
@@ -949,48 +1004,42 @@ void publishPath() {
 		stateVP[1] = path[i].pose.position.y;
 		stateVP[2] = path[i].pose.position.z;
 		stateVP[3] = tf::getYaw(pose.getRotation());
-		publishViewpoint(stateVP, path[i].header.seq, 0);
+		publishViewpoint(path[i]);
 	}
 	
 	// End point
-	//pathToPub.poses.push_back(path[0]);				
+	//pathToPub.poses.push_back(path[0]);
 		
 	marker_pub.publish(pathToPub);	
 }
 
-void publishViewpoint(StateVector stateVP, int VP_ind, double blue) {
+void publishViewpoint(geometry_msgs::PoseStamped vp) {
 	/* display sampled viewpoint in rviz */
 	visualization_msgs::Marker point;
 	point.header.frame_id = "/kopt_frame";
 	point.header.stamp = ros::Time::now();
-	point.id = VP_ind;
+	point.id = vp.header.seq;
 	point.ns = "Viewpoints";
 	point.type = visualization_msgs::Marker::ARROW;
-	point.pose.position.x = stateVP[0];
-	point.pose.position.y = stateVP[1];
-	point.pose.position.z = stateVP[2];
+	point.pose.position.x = vp.pose.position.x;
+	point.pose.position.y = vp.pose.position.y;
+	point.pose.position.z = vp.pose.position.z;
 
-#if DIMENSIONALITY>4
-	tf::Quaternion q = tf::createQuaternionFromRPY(stateVP[3],stateVP[4],stateVP[5]);
-#else
-	tf::Quaternion q = tf::createQuaternionFromRPY(0,0,stateVP[3]);
-#endif
-	point.pose.orientation.x = q.x();
-	point.pose.orientation.y = q.y();
-	point.pose.orientation.z = q.z();
-	point.pose.orientation.w = q.w();
+	point.pose.orientation.x = vp.pose.orientation.x;
+	point.pose.orientation.y = vp.pose.orientation.y;
+	point.pose.orientation.z = vp.pose.orientation.z;
+	point.pose.orientation.w = vp.pose.orientation.w;
 	
-	if(problemBoundary.size)
-		scaleVP = sqrt(SQ(problemBoundary.size[0])+SQ(problemBoundary.size[1])+SQ(problemBoundary.size[2]))/70.0;
-	else
-		scaleVP = sqrt(SQ(spaceSize[0])+SQ(spaceSize[1])+SQ(spaceSize[2]))/70.0;
-	scaleVP/=1;
+	//double scaleVP = sqrt(SQ(problemBoundary.size[0])+SQ(problemBoundary.size[1])+SQ(problemBoundary.size[2]))/70.0;
+	double scaleVP = sqrt(SQ(spaceSize[0])+SQ(spaceSize[1])+SQ(spaceSize[2]))/70.0;
+	scaleVP/=1;	
+	
 	point.scale.x = scaleVP;
 	point.scale.y = scaleVP/25.0;
 	point.scale.z = scaleVP/25.0;
 	point.color.r = 0.8f;
 	point.color.g = 0.5f;
-	point.color.b = 0.0f+blue;
+	point.color.b = 0.0f;
 	point.color.a = 0.7;
 	point.lifetime = ros::Duration();
 	viewpoint_pub.publish(point);
@@ -1011,16 +1060,20 @@ void checkNewTourFile() {
 			std::vector<std::string> poseStr;
 			
 			boost::split(poseStr, line, boost::is_any_of("\t"));
-			
-			
+						
 			fileVP.open((pkgPath+"/viewpoints/viewpoint_"+poseStr[0]+".txt").c_str(), std::ios::in);
 			if(fileVP.is_open()) {
 				while(getline(fileVP,lineVP)) {
 					std::vector<std::string> poseStrVP;
 					boost::split(poseStrVP, lineVP, boost::is_any_of("\t"));
-					if(std::fabs(std::atof(poseStr[1].c_str()) - std::atof(poseStrVP[0].c_str())) < 0.001 &&
-						std::fabs(std::atof(poseStr[2].c_str()) - std::atof(poseStrVP[1].c_str())) < 0.001 &&
-						std::fabs(std::atof(poseStr[3].c_str()) - std::atof(poseStrVP[2].c_str())) < 0.001) {
+					
+					if( std::fabs(std::atof(poseStr[1].c_str()) - std::atof(poseStrVP[0].c_str())) < threshold &&
+						std::fabs(std::atof(poseStr[2].c_str()) - std::atof(poseStrVP[1].c_str())) < threshold &&
+						std::fabs(std::atof(poseStr[3].c_str()) - std::atof(poseStrVP[2].c_str())) < threshold &&
+						std::fabs(std::atof(poseStr[4].c_str()) - std::atof(poseStrVP[3].c_str())) < threshold &&
+						std::fabs(std::atof(poseStr[5].c_str()) - std::atof(poseStrVP[4].c_str())) < threshold &&
+						std::fabs(std::atof(poseStr[6].c_str()) - std::atof(poseStrVP[5].c_str())) < threshold &&
+						std::fabs(std::atof(poseStr[7].c_str()) - std::atof(poseStrVP[6].c_str())) < threshold ) {
 						OK = true;
 						break;
 					}
@@ -1051,14 +1104,17 @@ void generateNewTourFile() {
 	std::fstream fileTour;
 	pkgPath = ros::package::getPath("koptplanner");
 
-	fileTour.open((pkgPath+"/data/tour.txt").c_str(), std::ios::out);
+	// Clear old path
+	fileTour.open((pkgPath+"/data/tour.txt").c_str(), std::ios::out | std::ofstream::trunc);
+	fileTour.close();
+
+	fileTour.open((pkgPath+"/data/tour.txt").c_str(), std::ios::out | std::ios::app);
 	if (fileTour.is_open())	{
 		file.open("src/tempTourSave.txt", std::ios::in);
 		if (file.is_open())	{
 			while(getline(file,line)) {
 				if(	line.find("NAME") == std::string::npos && line.find("COMMENT") == std::string::npos && line.find("TYPE") == std::string::npos && line.find("DIMENSION") == std::string::npos && line.find("TOUR_SECTION") == std::string::npos && line.find("-1") == std::string::npos && line.find("EOF") == std::string::npos) {
 					line = std::to_string(std::atoi(line.c_str())-1);
-					
 					
 					fileVP.open((pkgPath+"/viewpoints/viewpoint_"+line+".txt").c_str(), std::ios::in);
 					if(fileVP.is_open()) {

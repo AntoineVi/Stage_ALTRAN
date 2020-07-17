@@ -366,15 +366,17 @@ bool viewpointsGenerator(koptplanner::inspection::Request  &req, koptplanner::in
 		tri.push_back(tmp);
 		
 		// Write start point in the viewpoint id=0 file
-		file.open(pkgPath+"/viewpoints/viewpoint_0.txt", std::ios::app | std::ios::out);
+		file.open(pkgPath+"/viewpoints/viewpoint_0.txt", std::ios::out | std::ios::trunc);
 		if(!file.is_open())
+		
 			ROS_ERROR("Could not open viewpoint file");
-		file << std::to_string(itFixedPoses->position.x)+"\t";
-		file << std::to_string(itFixedPoses->position.y)+"\t";
-		file << std::to_string(itFixedPoses->position.z)+"\t";
-		file << std::to_string(0.0)+"\t";
-		file << std::to_string(0.0)+"\t";
-		file << std::to_string(tf::getYaw(pose.getRotation()))+"\n";
+		file << std::setprecision(8) << std::to_string(itFixedPoses->position.x)+"\t";
+		file << std::setprecision(8) << std::to_string(itFixedPoses->position.y)+"\t";
+		file << std::setprecision(8) << std::to_string(itFixedPoses->position.z)+"\t";
+		file << std::setprecision(8) << std::to_string(itFixedPoses->orientation.x)+"\t";
+		file << std::setprecision(8) << std::to_string(itFixedPoses->orientation.y)+"\t";
+		file << std::setprecision(8) << std::to_string(itFixedPoses->orientation.z)+"\t";
+		file << std::setprecision(8) << std::to_string(itFixedPoses->orientation.w)+"\n";
 		file.close();
 	}
 
@@ -481,13 +483,13 @@ bool viewpointsGenerator(koptplanner::inspection::Request  &req, koptplanner::in
 		file.open((pkgPath+"/viewpoints/viewpoint_"+std::to_string(tri.size())+".txt").c_str(), std::ios::app | std::ios::out);
 		if(!file.is_open())
 			ROS_ERROR("Could not open viewpoint file");
-		file << std::to_string((req.requiredPoses.end()-1)->position.x)+"\t";
-		file << std::to_string((req.requiredPoses.end()-1)->position.y)+"\t";
-		file << std::to_string((req.requiredPoses.end()-1)->position.z)+"\t";
-		file << std::to_string((req.requiredPoses.end()-1)->orientation.x)+"\t";
-		file << std::to_string((req.requiredPoses.end()-1)->orientation.y)+"\t";
-		file << std::to_string((req.requiredPoses.end()-1)->orientation.z)+"\t";
-		file << std::to_string((req.requiredPoses.end()-1)->orientation.w)+"\n";
+		file << std::setprecision(8) << std::to_string((req.requiredPoses.end()-1)->position.x)+"\t";
+		file << std::setprecision(8) << std::to_string((req.requiredPoses.end()-1)->position.y)+"\t";
+		file << std::setprecision(8) << std::to_string((req.requiredPoses.end()-1)->position.z)+"\t";
+		file << std::setprecision(8) << std::to_string((req.requiredPoses.end()-1)->orientation.x)+"\t";
+		file << std::setprecision(8) << std::to_string((req.requiredPoses.end()-1)->orientation.y)+"\t";
+		file << std::setprecision(8) << std::to_string((req.requiredPoses.end()-1)->orientation.z)+"\t";
+		file << std::setprecision(8) << std::to_string((req.requiredPoses.end()-1)->orientation.w)+"\n";
 		file.close();
 	}
 	
@@ -517,14 +519,14 @@ bool viewpointsGenerator(koptplanner::inspection::Request  &req, koptplanner::in
 	if(endPoint) {
 		/* clean viewpoints file */
 		for(int i=1; i<maxID-1; i++) {
-			file.open((pkgPath+"/viewpoints/viewpoint_"+std::to_string(i)+".txt").c_str(), std::ios::out);
+			file.open((pkgPath+"/viewpoints/viewpoint_"+std::to_string(i)+".txt").c_str(), std::ios::out | std::ios::trunc);
 			file.close();
 		}
 	}
 	else {
 		/* clean viewpoints file */
 		for(int i=1; i<maxID; i++) {
-			file.open((pkgPath+"/viewpoints/viewpoint_"+std::to_string(i)+".txt").c_str(), std::ios::out);
+			file.open((pkgPath+"/viewpoints/viewpoint_"+std::to_string(i)+".txt").c_str(), std::ios::out | std::ios::trunc);
 			file.close();
 		}
 	}
@@ -576,18 +578,24 @@ bool viewpointsGenerator(koptplanner::inspection::Request  &req, koptplanner::in
 		
 		ROS_INFO("%d VPs for triangle %d", (int) gVect.size(), i);
 		for(int j=gVect.size()-1; j>=0; j--) {
-			publishViewpoint(gVect[j], i*1000+j, float(i)/gVect.size());				
+			//publishViewpoint(gVect[j], i*1000+j, float(i)/gVect.size());				
 
 			file.open((pkgPath+"/viewpoints/viewpoint_"+std::to_string(i)+".txt").c_str(), std::ios::app | std::ios::out);
 			if(!file.is_open())
 				ROS_ERROR("Could not open viewpoint file");
 
-			file << std::to_string(gVect[j][0])+"\t";
-			file << std::to_string(gVect[j][1])+"\t";
-			file << std::to_string(gVect[j][2])+"\t";
-			file << std::to_string(0.0)+"\t";
-			file << std::to_string(0.0)+"\t";
-			file << std::to_string(gVect[j][3])+"\n";
+			file << std::setprecision(8) << std::to_string(gVect[j][0])+"\t";
+			file << std::setprecision(8) << std::to_string(gVect[j][1])+"\t";
+			file << std::setprecision(8) << std::to_string(gVect[j][2])+"\t";
+#if DIMENSIONALITY>4
+			tf::Quaternion q = tf::createQuaternionFromRPY(gVect[j][3],gVect[j][4],gVect[j][5]);
+#else
+			tf::Quaternion q = tf::createQuaternionFromRPY(0.0,0.0,gVect[j][3]);
+#endif
+			file << std::setprecision(8) << q.x() << "\t";
+			file << std::setprecision(8) << q.y() << "\t";
+			file << std::setprecision(8) << q.z() << "\t";
+			file << std::setprecision(8) << q.w() << "\n";
 			file.close();
 		}
 		gVect.clear();
