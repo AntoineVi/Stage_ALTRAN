@@ -676,8 +676,8 @@ void planForHiddenTrangles() {
 			
 				if(reinitRRTs==NULL)
 					reinitRRTs = new int[maxID];
-				for(int q = 0; q<maxID; q++) {
-					reinitRRTs[q] = 1;
+				for(int i = 0; i<maxID; i++) {
+					reinitRRTs[i] = 1;
 					vals[i] = new double[3];
 					vals[i][0] = VP[i][0]*g_scale;
 					vals[i][1] = VP[i][1]*g_scale;
