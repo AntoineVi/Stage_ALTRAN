@@ -1,5 +1,5 @@
 /*!
- * \file plan.cpp
+ * \file avoidObstacle.cpp
  *
  * More elaborate description
  */
@@ -144,7 +144,7 @@ void fillOctree(geometry_msgs::PoseStamped previousVP, geometry_msgs::PoseStampe
 double octreeScaling(double value);
 geometry_msgs::Pose selectViewpointFromFile(std::vector<double> xs, std::vector<double> ys, std::vector<double> zs, int VP_id);
 bool isTriangleVisible(std::vector<double> xs, std::vector<double> ys, std::vector<double> zs);
-void changeInspectionPath(int firstIndicePath);
+void changeInspectionPath();
 void cleanVariables();
 
 void checkNewTourFile();
@@ -170,7 +170,7 @@ int main(int argc, char **argv)
 	obsBoxSize = 50;
 	pkgPath = ros::package::getPath("koptplanner");
 	g_security_distance = 5.0;
-	octreeSize = 128;
+	octreeSize = 32;
 	
 	readSTLfile(ros::package::getPath("request")+"/meshes/asciiavion.stl");
 	octree = new Octree<std::vector<int>>(octreeSize);
@@ -561,201 +561,175 @@ void planForHiddenTrangles() {
 		gettimeofday(&time, NULL);
 		time_READ -= time.tv_sec * 1000000 + time.tv_usec;
 #endif
-		//modifiedPath = true;
+		modifiedPath = true;
 		
 		// Add the last viewpoints OK as start and stop points
 		int cptVP_KO = 0;
 		int nbVP_KO = vectorChangedVP.size();
-		std::vector<std::pair<int,int>> indicesPathKO;
-		std::pair<int,int> boundsPathKO;
-				
+		
 		ROS_INFO("Number of VPs KO:%d", nbVP_KO);
 		
 		for(int i=0; i<path.size(); i++) {
 			if(std::find(vectorChangedVP.begin(), vectorChangedVP.end(), path[i].header.seq) != vectorChangedVP.end()) {
 				if(cptVP_KO == 0) {
-					boundsPathKO.first = i-1;
-					//indPathFirstVP = i-1;
+					indPathFirstVP = i-1;
 					vectorChangedVP.insert(vectorChangedVP.begin(), path[i-1].header.seq);
 				}
 				cptVP_KO++;
 			}
 			else {
-				/*if(cptVP_KO > 0 && cptVP_KO <= nbVP_KO) {
+				if(cptVP_KO > 0 && cptVP_KO <= nbVP_KO) {
 					vectorChangedVP.insert(vectorChangedVP.begin()+cptVP_KO, path[i].header.seq);
 					if(cptVP_KO == nbVP_KO) {
 						break;
 					}						
-				}*/
-				if(cptVP_KO > 0 && cptVP_KO <= nbVP_KO) {
-					boundsPathKO.second = i;
-					indicesPathKO.push_back(boundsPathKO);
-					vectorChangedVP.insert(vectorChangedVP.begin()+cptVP_KO, path[i].header.seq);
-					cptVP_KO = 0;
 				}
 			}		
 		}
-		
+				
 		maxID = vectorChangedVP.size();
 		ROS_INFO("Number of VPs in the modified path:%d", maxID);
-		
-		for(int i=0; i<indicesPathKO.size(); i++) {
-			for(int j=indicesPathKO[i].first; j<=indicesPathKO[i].second;j++)
-				ROS_INFO("id:%d", path[j].header.seq);
-			ROS_INFO("END SECTION");
-		}
-		
-		for(int j=0; j<indicesPathKO.size(); j++) {
-			maxID = indicesPathKO[j].second - indicesPathKO[j].first+1;
-			ROS_INFO("maxID:%d", maxID);
-	
-			if(VP)
-				delete[] VP;
-	#ifdef USE_FIXEDWING_MODEL
-			VP = new StateVector[2*maxID];
-			/* load lookup table */
-			std::fstream lookupFile;
-			lookupFile.open((pkgPath+"/lookupTable/lookupTable50x50.txt").c_str(), std::ios::in);
-			lookupTable = new double*[LOOKUPTABLE_SIZE];
-			for (int i = 0; i<LOOKUPTABLE_SIZE; i++) {
-				lookupTable[i] = new double[LOOKUPTABLE_SIZE];
-				for (int j = 0; j<LOOKUPTABLE_SIZE; j++) {
-					lookupFile >> lookupTable[i][j];
-				}
-			}
-	#else
-			VP = new StateVector[maxID];
-	#endif
 
-			if(reinitRRTs==NULL)
-				reinitRRTs = new int[maxID];
-			for(int q = 0; q<maxID; q++) {
-				reinitRRTs[q] = 1;
+		if(VP)
+			delete[] VP;
+#ifdef USE_FIXEDWING_MODEL
+		VP = new StateVector[2*maxID];
+		/* load lookup table */
+		std::fstream lookupFile;
+		lookupFile.open((pkgPath+"/lookupTable/lookupTable50x50.txt").c_str(), std::ios::in);
+		lookupTable = new double*[LOOKUPTABLE_SIZE];
+		for (int i = 0; i<LOOKUPTABLE_SIZE; i++) {
+			lookupTable[i] = new double[LOOKUPTABLE_SIZE];
+			for (int j = 0; j<LOOKUPTABLE_SIZE; j++) {
+				lookupFile >> lookupTable[i][j];
 			}
-		
-			/* ------------- TSP -------------- */
-			double ** vals = new double* [maxID];
-			std::vector<double> xs;
-			std::vector<double> ys;
-			std::vector<double> zs;
-	
-			for(int i = 0; i<maxID; i++) {
-				vals[i] = new double[3];
+		}
+#else
+		VP = new StateVector[maxID];
+#endif
+
+		if(reinitRRTs==NULL)
+			reinitRRTs = new int[maxID];
+		for(int q = 0; q<maxID; q++) {
+			reinitRRTs[q] = 1;
+		}
 			
-				// /!\ Indice in indiceMesh = indicePath - 1 (indicePath add the startup point at indice 0)
-				if(path[indicesPathKO[j].first+i].header.seq > 0) {
-					xs = {	mesh[path[indicesPathKO[j].first+i].header.seq-1].poses[0].pose.position.x,
-							mesh[path[indicesPathKO[j].first+i].header.seq-1].poses[1].pose.position.x,
-							mesh[path[indicesPathKO[j].first+i].header.seq-1].poses[2].pose.position.x,
-							path[indicesPathKO[j].first+i].pose.position.x};
-			
-					ys = {	mesh[path[indicesPathKO[j].first+i].header.seq-1].poses[0].pose.position.y,
-							mesh[path[indicesPathKO[j].first+i].header.seq-1].poses[1].pose.position.y,
-							mesh[path[indicesPathKO[j].first+i].header.seq-1].poses[2].pose.position.y,
-							path[indicesPathKO[j].first+i].pose.position.y};
-					
-					zs = {	mesh[path[indicesPathKO[j].first+i].header.seq-1].poses[0].pose.position.z,
-							mesh[path[indicesPathKO[j].first+i].header.seq-1].poses[1].pose.position.z,
-							mesh[path[indicesPathKO[j].first+i].header.seq-1].poses[2].pose.position.z,
-							path[indicesPathKO[j].first+i].pose.position.z};
-				}
-				else {
-					xs = {path[indicesPathKO[j].first+i].pose.position.x};				
-					ys = {path[indicesPathKO[j].first+i].pose.position.y};						
-					zs = {path[indicesPathKO[j].first+i].pose.position.z};
-				}
+		/* ------------- TSP -------------- */
+		double ** vals = new double* [maxID];
+		std::vector<double> xs;
+		std::vector<double> ys;
+		std::vector<double> zs;
 		
-				if(isTriangleVisible(xs, ys, zs)) {
-					//vectorChangedVP.erase(std::find(vectorChangedVP.begin(), vectorChangedVP.end(), path[indicesPathKO[j].first+i].header.seq));
-		
-					tf::Pose pose;
-					tf::poseMsgToTF(path[indicesPathKO[j].first+i].pose, pose);
-		
-					VP[i][0] = path[indicesPathKO[j].first+i].pose.position.x;
-					VP[i][1] = path[indicesPathKO[j].first+i].pose.position.y;
-					VP[i][2] = path[indicesPathKO[j].first+i].pose.position.z;
-					VP[i][3] = tf::getYaw(pose.getRotation());
-				}
-				else {
-					// Remove the current VP because the obstacle hides is triangle
-					xs.pop_back();
-					ys.pop_back();
-					zs.pop_back();
-			
-					geometry_msgs::Pose newVP = selectViewpointFromFile(xs, ys, zs, path[indicesPathKO[j].first+i].header.seq);
-					tf::Pose pose;
-					tf::poseMsgToTF(newVP, pose);
-	
-					VP[i][0] = newVP.position.x;
-					VP[i][1] = newVP.position.y;
-					VP[i][2] = newVP.position.z;			
-					VP[i][3] = tf::getYaw(pose.getRotation());
-				}
+		for(int i = 0; i<maxID; i++) {
+			vals[i] = new double[3];
 				
-				vals[i][0] = VP[i][0]*g_scale;
-				vals[i][1] = VP[i][1]*g_scale;
-				vals[i][2] = VP[i][2]*g_scale;
+			// /!\ Indice in indiceMesh = indicePath - 1 (indicePath add the startup point at indice 0)
+			if(path[indPathFirstVP+i].header.seq > 0) {
+				xs = {	mesh[path[indPathFirstVP+i].header.seq-1].poses[0].pose.position.x,
+						mesh[path[indPathFirstVP+i].header.seq-1].poses[1].pose.position.x,
+						mesh[path[indPathFirstVP+i].header.seq-1].poses[2].pose.position.x,
+						path[indPathFirstVP+i].pose.position.x};
+				
+				ys = {	mesh[path[indPathFirstVP+i].header.seq-1].poses[0].pose.position.y,
+						mesh[path[indPathFirstVP+i].header.seq-1].poses[1].pose.position.y,
+						mesh[path[indPathFirstVP+i].header.seq-1].poses[2].pose.position.y,
+						path[indPathFirstVP+i].pose.position.y};
+						
+				zs = {	mesh[path[indPathFirstVP+i].header.seq-1].poses[0].pose.position.z,
+						mesh[path[indPathFirstVP+i].header.seq-1].poses[1].pose.position.z,
+						mesh[path[indPathFirstVP+i].header.seq-1].poses[2].pose.position.z,
+						path[indPathFirstVP+i].pose.position.z};
 			}
-			//ROS_INFO("Number of VPs in the modified path:%d", (int) vectorChangedVP.size());
-	
-	#ifdef __TIMING_INFO__
-			gettimeofday(&time, NULL);
-			time_READ += time.tv_sec * 1000000 + time.tv_usec;
-	#endif
-			/* use provided interface of the TSP solver */
-			std::string params = "MOVE_TYPE=5\n";
-			params += "PRECISION=1\n";
-			params += "PATCHING_C=3\n";
-			params += "PATCHING_A=2\n";
-			params += "RUNS=1\n";
-			params += "TIME_LIMIT=5\n";
-			params += "TRACE_LEVEL=0\n";
-			params += "OUTPUT_TOUR_FILE="+pkgPath+"/data/tempTour.txt\n";
-			params += "EOF";
-
-			std::string prob = "NAME:inspection\n";
-	#ifdef USE_FIXEDWING_MODEL
-			prob += "TYPE:ATSP\n";
-			prob += "EDGE_WEIGHT_FORMAT:FULL_MATRIX\n";
-			prob += "EDGE_WEIGHT_TYPE:RRTFIXEDWING_3D\n";
-	#else
-			prob += "TYPE:TSP\n";
-			prob += "EDGE_WEIGHT_TYPE:RRT_3D\n";
-	#endif
-			std::stringstream ss; ss<<maxID;
-			prob += "DIMENSION:"+ss.str()+"\n";
-			prob += "NODE_COORD_SECTION\n";
-			prob += "EOF";
-	#ifdef __TIMING_INFO__
-			gettimeofday(&time, NULL);
-			time_LKH -= time.tv_sec * 1000000 + time.tv_usec;
-	#endif
-			size_t length = params.length();
-			char * par;
-			assert(par = (char*) malloc(length+10));
-			strcpy(par, params.c_str());
-			length = prob.length();
-			char * pro;
-			assert(pro = (char*) malloc(length+10));
-			strcpy(pro, prob.c_str());
-
-			/* call TSP solver */
-			ROS_INFO("Start LKH");
-			LKHmainFunction(maxID,vals,par,pro);
-
-	#ifdef __TIMING_INFO__
-			gettimeofday(&time, NULL);
-			time_LKH += time.tv_sec * 1000000 + time.tv_usec;
-	#endif
-	
-			ROS_INFO("Change the path");
-			changeInspectionPath(indicesPathKO[j].first);
+			else {
+				xs = {path[indPathFirstVP+i].pose.position.x};				
+				ys = {path[indPathFirstVP+i].pose.position.y};						
+				zs = {path[indPathFirstVP+i].pose.position.z};
+			}
 			
-			for(int i = 0; i<maxID; i++) {
-			  delete[] vals[i];
+			if(isTriangleVisible(xs, ys, zs)) {
+				tf::Pose pose;
+				tf::poseMsgToTF(path[indPathFirstVP+i].pose, pose);
+			
+				VP[i][0] = path[indPathFirstVP+i].pose.position.x;
+				VP[i][1] = path[indPathFirstVP+i].pose.position.y;
+				VP[i][2] = path[indPathFirstVP+i].pose.position.z;
+				VP[i][3] = tf::getYaw(pose.getRotation());
 			}
-			delete[] vals;
+			else {
+				// Remove the current VP because the obstacle hides is triangle
+				xs.pop_back();
+				ys.pop_back();
+				zs.pop_back();
+				
+				geometry_msgs::Pose newVP = selectViewpointFromFile(xs, ys, zs, path[indPathFirstVP+i].header.seq);
+				tf::Pose pose;
+				tf::poseMsgToTF(newVP, pose);
+		
+				VP[i][0] = newVP.position.x;
+				VP[i][1] = newVP.position.y;
+				VP[i][2] = newVP.position.z;			
+				VP[i][3] = tf::getYaw(pose.getRotation());
+			}
+					
+			vals[i][0] = VP[i][0]*g_scale;
+			vals[i][1] = VP[i][1]*g_scale;
+			vals[i][2] = VP[i][2]*g_scale;
 		}
+		ROS_INFO("Number of VPs in the modified path:%d", vectorChangedVP.size());
+		
+#ifdef __TIMING_INFO__
+		gettimeofday(&time, NULL);
+		time_READ += time.tv_sec * 1000000 + time.tv_usec;
+#endif
+		/* use provided interface of the TSP solver */
+		std::string params = "MOVE_TYPE=5\n";
+		params += "PRECISION=1\n";
+		params += "PATCHING_C=3\n";
+		params += "PATCHING_A=2\n";
+		params += "RUNS=1\n";
+		params += "TIME_LIMIT=5\n";
+		params += "TRACE_LEVEL=0\n";
+		params += "OUTPUT_TOUR_FILE="+pkgPath+"/data/tempTour.txt\n";
+		params += "EOF";
+
+		std::string prob = "NAME:inspection\n";
+#ifdef USE_FIXEDWING_MODEL
+		prob += "TYPE:ATSP\n";
+		prob += "EDGE_WEIGHT_FORMAT:FULL_MATRIX\n";
+		prob += "EDGE_WEIGHT_TYPE:RRTFIXEDWING_3D\n";
+#else
+		prob += "TYPE:TSP\n";
+		prob += "EDGE_WEIGHT_TYPE:RRT_3D\n";
+#endif
+		std::stringstream ss; ss<<maxID;
+		prob += "DIMENSION:"+ss.str()+"\n";
+		prob += "NODE_COORD_SECTION\n";
+		prob += "EOF";
+#ifdef __TIMING_INFO__
+		gettimeofday(&time, NULL);
+		time_LKH -= time.tv_sec * 1000000 + time.tv_usec;
+#endif
+		size_t length = params.length();
+		char * par;
+		assert(par = (char*) malloc(length+10));
+		strcpy(par, params.c_str());
+		length = prob.length();
+		char * pro;
+		assert(pro = (char*) malloc(length+10));
+		strcpy(pro, prob.c_str());
+
+		/* call TSP solver */
+		ROS_INFO("Start LKH");
+		LKHmainFunction(maxID,vals,par,pro);
+	
+#ifdef __TIMING_INFO__
+		gettimeofday(&time, NULL);
+		time_LKH += time.tv_sec * 1000000 + time.tv_usec;
+#endif
+		for(int i = 0; i<maxID; i++) {
+		  delete[] vals[i];
+		}
+		delete[] vals;
 	}
 	else
 		ROS_INFO("Not need to change the inspection path!");
@@ -766,7 +740,7 @@ void planForHiddenTrangles() {
 		time_CHANGE_PATH -= time.tv_sec * 1000000 + time.tv_usec;
 #endif
 		ROS_INFO("Change the path");
-		//changeInspectionPath(0);
+		changeInspectionPath();
 #ifdef __TIMING_INFO__
 		gettimeofday(&time, NULL);
 		time_CHANGE_PATH += time.tv_sec * 1000000 + time.tv_usec;
@@ -848,7 +822,7 @@ geometry_msgs::Pose selectViewpointFromFile(std::vector<double> xs, std::vector<
 	}
 }
 
-void changeInspectionPath(int firstIndicePath) {
+void changeInspectionPath() {
 	bool addedPath = false;
 	int waypointID = 0;
 	
@@ -869,7 +843,7 @@ void changeInspectionPath(int firstIndicePath) {
 				file << std::setprecision(8) << it_path->pose.orientation.z << "\t";
 				file << std::setprecision(8) << it_path->pose.orientation.w << "\n";
 			}
-			else {
+			else if(!addedPath) {
 				//file << "\n";
 				for(std::vector<geometry_msgs::PoseStamped>::iterator it = res_g->inspectionPath.poses.begin(); it != res_g->inspectionPath.poses.end()-1; it++) {
 					if(it->pose.position.x != (it+1)->pose.position.x && it->pose.position.y != (it+1)->pose.position.y && it->pose.position.z != (it+1)->pose.position.z) {
@@ -883,7 +857,7 @@ void changeInspectionPath(int firstIndicePath) {
 								std::fabs(VP[i][2] - it->pose.position.z) < threshold /*&&
 								std::fabs(VP[i][3] - tf::getYaw(pose.getRotation())) < threshold*/) {
 							
-								file << path[firstIndicePath+i].header.seq << "\t";
+								file << path[indPathFirstVP+i].header.seq << "\t";
 								file << std::setprecision(8) << it->pose.position.x << "\t";
 								file << std::setprecision(8) << it->pose.position.y << "\t";
 								file << std::setprecision(8) << it->pose.position.z << "\t";
@@ -891,8 +865,6 @@ void changeInspectionPath(int firstIndicePath) {
 								file << std::setprecision(8) << it->pose.orientation.y << "\t";
 								file << std::setprecision(8) << it->pose.orientation.z << "\t";
 								file << std::setprecision(8) << it->pose.orientation.w << "\n";
-								
-								vectorChangedVP.erase(std::find(vectorChangedVP.begin(), vectorChangedVP.end(), path[firstIndicePath+i].header.seq));
 								break;
 							}
 						 }
@@ -912,7 +884,7 @@ void changeInspectionPath(int firstIndicePath) {
 						}
 					}
 				}
-				//addedPath = true;
+				addedPath = true;
 			}
 		}
 		file.close();
