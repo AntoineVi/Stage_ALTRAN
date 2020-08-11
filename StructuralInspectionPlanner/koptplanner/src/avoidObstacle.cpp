@@ -603,7 +603,6 @@ void planForHiddenTrangles() {
 			VP = new StateVector[maxID];
 #endif
 			/* ------------- TSP -------------- */
-			double ** vals = new double* [maxID];
 			std::vector<double> xs;
 			std::vector<double> ys;
 			std::vector<double> zs;
@@ -613,8 +612,6 @@ void planForHiddenTrangles() {
 			time_READ -= time.tv_sec * 1000000 + time.tv_usec;
 #endif
 			for(int i = 0; i<maxID; i++) {
-				vals[i] = new double[3];
-			
 				// /!\ Indice in indiceMesh = indicePath - 1 (indicePath add the startup point at indice 0)
 				if(path[indicesPathKO[j].first+i].header.seq > 0) {
 					xs = {	mesh[path[indicesPathKO[j].first+i].header.seq-1].poses[0].pose.position.x,
@@ -668,10 +665,6 @@ void planForHiddenTrangles() {
 				}
 				
 				//ROS_INFO("VP: ID:%d, x:%f, y:%f, z:%f", path[indicesPathKO[j].first+i].header.seq, VP[i][0], VP[i][1], VP[i][2]);
-				
-				vals[i][0] = VP[i][0]*g_scale;
-				vals[i][1] = VP[i][1]*g_scale;
-				vals[i][2] = VP[i][2]*g_scale;
 			}
 	
 #ifdef __TIMING_INFO__
@@ -679,10 +672,16 @@ void planForHiddenTrangles() {
 			time_READ += time.tv_sec * 1000000 + time.tv_usec;
 #endif
 			if(maxID > 3) {
+				double ** vals = new double* [maxID];
+			
 				if(reinitRRTs==NULL)
 					reinitRRTs = new int[maxID];
 				for(int q = 0; q<maxID; q++) {
 					reinitRRTs[q] = 1;
+					vals[i] = new double[3];
+					vals[i][0] = VP[i][0]*g_scale;
+					vals[i][1] = VP[i][1]*g_scale;
+					vals[i][2] = VP[i][2]*g_scale;	
 				}
 			
 				/* use provided interface of the TSP solver */
@@ -763,10 +762,7 @@ void planForHiddenTrangles() {
 				path[indicesPathKO[j].first+1].pose.orientation.y = q.y();
 				path[indicesPathKO[j].first+1].pose.orientation.z = q.z();
 				path[indicesPathKO[j].first+1].pose.orientation.w = q.w();
-			}
-				
-			
-			
+			}			
 	
 #ifdef __TIMING_INFO__
 			gettimeofday(&time, NULL);
