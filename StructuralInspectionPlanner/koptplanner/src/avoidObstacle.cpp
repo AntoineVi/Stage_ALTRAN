@@ -384,14 +384,8 @@ void setupSystem() {
 	VP = NULL;
 	lookupTable = NULL;
 	plannerArrayBool = false;
-	g_closed_tour = true;
+	g_closed_tour = false;
 	res_g = new koptplanner::inspection::Response();
-
-	// static function variable reset variables:
-	Gain23Static = 0;
-	GreedyTourmark = 0;
-	SFCTourRank = 0;
-	ReadPenaltiesStatic = 0;
 	
 	/* loading the parameters */
 #ifdef USE_FIXEDWING_MODEL
@@ -672,6 +666,12 @@ void planForHiddenTrangles() {
 			time_READ += time.tv_sec * 1000000 + time.tv_usec;
 #endif
 			if(maxID > 3) {
+				// static function variable reset variables:
+				Gain23Static = 0;
+				GreedyTourmark = 0;
+				SFCTourRank = 0;
+				ReadPenaltiesStatic = 0;
+			
 				double ** vals = new double* [maxID];
 			
 				if(reinitRRTs==NULL)
@@ -681,16 +681,18 @@ void planForHiddenTrangles() {
 					vals[i] = new double[3];
 					vals[i][0] = VP[i][0]*g_scale;
 					vals[i][1] = VP[i][1]*g_scale;
-					vals[i][2] = VP[i][2]*g_scale;	
+					vals[i][2] = VP[i][2]*g_scale;
+					
+					//ROS_INFO("VP: ID:%d, x:%f, y:%f, z:%f", path[indicesPathKO[j].first+i].header.seq, vals[i][0], vals[i][1], vals[i][2]);
 				}
 			
 				/* use provided interface of the TSP solver */
 				std::string params = "MOVE_TYPE=5\n";
 				params += "PRECISION=1\n";
-				params += "PATCHING_C=3\n";
-				params += "PATCHING_A=2\n";
-				params += "RUNS=1\n";
-				params += "TIME_LIMIT=5\n";
+				//params += "PATCHING_C=3\n";
+				//params += "PATCHING_A=2\n";
+				//params += "RUNS=1\n";
+				//params += "TIME_LIMIT=5\n";
 				params += "TRACE_LEVEL=0\n";
 				params += "OUTPUT_TOUR_FILE="+pkgPath+"/data/tempTour.txt\n";
 				params += "EOF";
@@ -706,6 +708,7 @@ void planForHiddenTrangles() {
 #endif
 				std::stringstream ss; ss<<maxID;
 				prob += "DIMENSION:"+ss.str()+"\n";
+				prob += "FIXED_EDGES_SECTION\n"+ss.str()+" 1\n-1\n";
 				prob += "NODE_COORD_SECTION\n";
 				prob += "EOF";
 #ifdef __TIMING_INFO__
@@ -886,30 +889,31 @@ void changeInspectionPath(int firstIDPathKO) {
 					path[indPath].pose.orientation.y = it->pose.orientation.y;
 					path[indPath].pose.orientation.z = it->pose.orientation.z;
 					path[indPath].pose.orientation.w = it->pose.orientation.w;
-					indPath++;
+					//indPath++;
 					break;
 				}
 			}
 			if(j == maxID) {
 				ROS_INFO("Add waypoint: x:%f, y:%f, z:%f", it->pose.position.x, it->pose.position.y, it->pose.position.z);
 				// LKH may add waypoints to avoid the obstacle
-				/*VPnewIDs.push_back(path.size()+waypointID);
+				VPnewIDs.push_back(path.size()+waypointID);
 				it->header.seq = path.size()+waypointID;
-				publishViewpoint(*it);
 				waypointID++;
-				waypoints.push_back(*it);*/
+				publishViewpoint(*it);
+				waypoints.push_back(*it);
 			}
-			//indPath++;
+			indPath++;
 		}
 	}
 	
 	// Change the IDs. Not done before to keep the match with VP[]
+	int oldPathSize = path.size();
 	int cptWPs = 0;
-	for(int i=0; i<VPnewIDs.size(); i++) {
-		if(VPnewIDs[i] >= path.size()) {
+	
+	for(int i=VPnewIDs.size()-1; i>0; i--) {
+		if(VPnewIDs[i] >= oldPathSize) {
 			path.insert(path.begin()+firstIDPathKO+i+cptWPs, waypoints[0]);
 			waypoints.erase(waypoints.begin());
-			path[firstIDPathKO+i+cptWPs].header.seq = VPnewIDs[i];
 			cptWPs++;
 		}
 		else
