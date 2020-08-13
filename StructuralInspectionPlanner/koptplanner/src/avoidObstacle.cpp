@@ -140,7 +140,7 @@ void readPath();
 void fillOctree(geometry_msgs::PoseStamped previousVP, geometry_msgs::PoseStamped vp);
 double octreeScaling(double value);
 geometry_msgs::Pose selectViewpointFromFile(std::vector<double> xs, std::vector<double> ys, std::vector<double> zs, int VP_id);
-bool isTriangleVisible(std::vector<double> xs, std::vector<double> ys, std::vector<double> zs);
+bool isVisibilityBoxOK(std::vector<double> xs, std::vector<double> ys, std::vector<double> zs);
 void changeInspectionPath(int firstIDPathKO);
 void cleanVariables();
 
@@ -628,8 +628,25 @@ void planForHiddenTrangles() {
 					ys = {path[indicesPathKO[j].first+i].pose.position.y};						
 					zs = {path[indicesPathKO[j].first+i].pose.position.z};
 				}
-		
-				if(isTriangleVisible(xs, ys, zs)) {
+				
+				// Check if the connection between the new path and the old one is OK
+				bool testConnection = true;
+				
+				if(i == 0) {
+					std::vector<double> xsConnection = {path[indicesPathKO[j].first+i-1].pose.position.x, path[indicesPathKO[j].first+i].pose.position.x};
+					std::vector<double> ysConnection = {path[indicesPathKO[j].first+i-1].pose.position.x, path[indicesPathKO[j].first+i].pose.position.x};
+					std::vector<double> zsConnection = {path[indicesPathKO[j].first+i-1].pose.position.x, path[indicesPathKO[j].first+i].pose.position.x};
+					testConnection = isVisibilityBoxOK(xsConnection, ysConnection, zsConnection);
+					
+				}
+				else if(i == maxID-1) {
+					std::vector<double> xsConnection = {path[indicesPathKO[j].first+i].pose.position.x, path[indicesPathKO[j].first+i+1].pose.position.x};
+					std::vector<double> ysConnection = {path[indicesPathKO[j].first+i].pose.position.x, path[indicesPathKO[j].first+i+1].pose.position.x};
+					std::vector<double> zsConnection = {path[indicesPathKO[j].first+i].pose.position.x, path[indicesPathKO[j].first+i+1].pose.position.x};
+					testConnection = isVisibilityBoxOK(xsConnection, ysConnection, zsConnection);
+				}
+				
+				if(testConnection && isVisibilityBoxOK(xs, ys, zs)) {
 					tf::Pose pose;
 					tf::poseMsgToTF(path[indicesPathKO[j].first+i].pose, pose);
 		
@@ -682,13 +699,11 @@ void planForHiddenTrangles() {
 					vals[i][0] = VP[i][0]*g_scale;
 					vals[i][1] = VP[i][1]*g_scale;
 					vals[i][2] = VP[i][2]*g_scale;
-					
-					//ROS_INFO("VP: ID:%d, x:%f, y:%f, z:%f", path[indicesPathKO[j].first+i].header.seq, vals[i][0], vals[i][1], vals[i][2]);
 				}
 			
 				/* use provided interface of the TSP solver */
 				std::string params = "MOVE_TYPE=5\n";
-				params += "PRECISION=1\n";
+				//params += "PRECISION=1\n";
 				//params += "PATCHING_C=3\n";
 				//params += "PATCHING_A=2\n";
 				//params += "RUNS=1\n";
@@ -800,7 +815,7 @@ void planForHiddenTrangles() {
 	ROS_INFO("Ready to receive obstacle pose from Publish point on RVIZ");
 }
 
-bool isTriangleVisible(std::vector<double> xs, std::vector<double> ys, std::vector<double> zs) {
+bool isVisibilityBoxOK(std::vector<double> xs, std::vector<double> ys, std::vector<double> zs) {
 	auto minmaxX = std::minmax_element(xs.begin(), xs.end()); //*minmaxX.first = minX ; *minmaxX.second = maxX
  	auto minmaxY = std::minmax_element(ys.begin(), ys.end()); //*minmaxY.first = minY ; *minmaxY.second = maxY
 	auto minmaxZ = std::minmax_element(zs.begin(), zs.end()); //*minmaxZ.first = minZ ; *minmaxZ.second = maxZ
@@ -834,7 +849,7 @@ geometry_msgs::Pose selectViewpointFromFile(std::vector<double> xs, std::vector<
 			ys.push_back(VPtmp.position.y);			
 			zs.push_back(VPtmp.position.z);
 			
-			VP_OK = isTriangleVisible(xs, ys, zs);
+			VP_OK = isVisibilityBoxOK(xs, ys, zs);
 			
 			if(!VP_OK) {
 				xs.pop_back();
