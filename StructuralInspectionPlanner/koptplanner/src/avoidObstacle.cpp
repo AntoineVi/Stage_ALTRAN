@@ -629,25 +629,6 @@ void planForHiddenTrangles() {
 					zs = {path[indicesPathKO[j].first+i].pose.position.z};
 				}
 				
-				// Check if the connection between the new path and the old one is OK
-				/*bool testConnection = true;
-				int boundedVP = 0; // Not the first/last VP in the subpath
-				
-				if(i == 0) {
-					std::vector<double> xsConnection = {path[indicesPathKO[j].first+i-1].pose.position.x, path[indicesPathKO[j].first+i].pose.position.x};
-					std::vector<double> ysConnection = {path[indicesPathKO[j].first+i-1].pose.position.y, path[indicesPathKO[j].first+i].pose.position.y};
-					std::vector<double> zsConnection = {path[indicesPathKO[j].first+i-1].pose.position.z, path[indicesPathKO[j].first+i].pose.position.z};
-					testConnection = isVisibilityBoxOK(xsConnection, ysConnection, zsConnection);
-					
-				}
-				else if(i == maxID-1) {
-					std::vector<double> xsConnection = {path[indicesPathKO[j].first+i].pose.position.x, path[indicesPathKO[j].first+i+1].pose.position.x};
-					std::vector<double> ysConnection = {path[indicesPathKO[j].first+i].pose.position.y, path[indicesPathKO[j].first+i+1].pose.position.y};
-					std::vector<double> zsConnection = {path[indicesPathKO[j].first+i].pose.position.z, path[indicesPathKO[j].first+i+1].pose.position.z};
-					testConnection = isVisibilityBoxOK(xsConnection, ysConnection, zsConnection);
-				}*/
-				
-				//if(testConnection && isVisibilityBoxOK(xs, ys, zs)) {
 				if(isVisibilityBoxOK(xs, ys, zs)) {
 					tf::Pose pose;
 					tf::poseMsgToTF(path[indicesPathKO[j].first+i].pose, pose);
@@ -832,22 +813,6 @@ geometry_msgs::Pose selectViewpointFromFile(std::vector<double> xs, std::vector<
 	bool VP_OK = false;
 	std::string line;
 	geometry_msgs::Pose VPtmp;
-	/*std::vector<double> xsConnection;
-	std::vector<double> ysConnection;
-	std::vector<double> zsConnection;
-	
-	// boundedVP = 1 => First viewpoint in the subpath
-	// boundedVP = 2 => Last viewpoint in the subpath
-	if(boundedVP == 1) {
-		xsConnection = {path[pathID-1].pose.position.x};
-		ysConnection = {path[pathID-1].pose.position.y};
-		zsConnection = {path[pathID-1].pose.position.z};
-	}
-	else if(boundedVP == 2) {
-		xsConnection = {path[pathID+1].pose.position.x};
-		ysConnection = {path[pathID+1].pose.position.y};
-		zsConnection = {path[pathID+1].pose.position.z};
-	}*/
 	
 	file.open((pkgPath+"/viewpoints/viewpoint_"+std::to_string(path[pathID].header.seq)+".txt").c_str());
 	if (file.is_open())	{
@@ -870,17 +835,10 @@ geometry_msgs::Pose selectViewpointFromFile(std::vector<double> xs, std::vector<
 			
 			VP_OK = isVisibilityBoxOK(xs, ys, zs);
 			
-			/*if(boundedVP > 0) {				
-				VP_OK &= isVisibilityBoxOK(xsConnection, ysConnection, zsConnection);
-			}*/				
-			
 			if(!VP_OK) {
 				xs.pop_back();
 				ys.pop_back();
 				zs.pop_back();
-				/*xsConnection.pop_back();
-				ysConnection.pop_back();
-				zsConnection.pop_back();*/
 			}
 		}
 		file.close();
@@ -942,24 +900,20 @@ void changeInspectionPath(int firstIDPathKO) {
 				publishViewpoint(*it);
 				waypoints.push_back(*it);
 			}
-			//indPath++;
 		}
 	}
 	
 	// Change the IDs. Not done before to keep the match with VP[]
 	int oldPathSize = path.size();
-	int cptWPs = 0;
 		
 	for(int i=0; i<VPnewIDs.size(); i++) {
 		if(VPnewIDs[i] >= oldPathSize) {
 			path.insert(path.begin()+firstIDPathKO+i, waypoints[0]);
 			path[firstIDPathKO+i].header.seq = VPnewIDs[i];
 			waypoints.erase(waypoints.begin());
-			cptWPs++;
 		}
 		else
 			path[firstIDPathKO+i].header.seq = VPnewIDs[i];
-		//publishViewpoint(path[firstIDPathKO+i+cptWPs]);
 	}
 }
 
@@ -1237,7 +1191,7 @@ void checkNewTourFile() {
 	}	
 	file.close();
 	for(int i=0; i<allVPsID.size();i++) {
-		if(allVPsID[i] < 396) {
+		if(allVPsID[i] <= mesh.size()) {
 			ROS_ERROR("Missing VP:%d!", allVPsID[i]);
 			ros::shutdown();
 		}
