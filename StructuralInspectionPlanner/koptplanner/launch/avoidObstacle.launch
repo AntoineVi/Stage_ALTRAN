@@ -1,8 +1,9 @@
 <launch>
 	<rosparam file="$(find koptplanner)/avion.yaml"/>
 
-    <node name="Inspection_Planner" pkg="koptplanner" type="viewpoints_generator" clear_params="true" output="screen"/>
+    <node name="Inspection_Planner" pkg="koptplanner" type="avoidObstacle" clear_params="true" output="screen"/>
     
     <node name="rviz" pkg="rviz" type="rviz"/>
+    
 </launch>
 

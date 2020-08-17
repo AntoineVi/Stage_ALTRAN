@@ -1,21 +1,26 @@
 StructuralInspectionPlanner
 ===========================
-Antoine: execute my code
+Antoine:
 ---------------------------
-To test the planner with existing viewpoints:
-
+To generate databases of viewpoints
 Shell #1
 ```sh
 roslaunch koptplanner viewpoints_generator.launch
 ```
-To add an obstacle to RVIZ, you have to click on "Publish Point" on the RVIZ toolbar and select a viewpoint marker.
 
-To generate and save viewpoints, in another shell:
+As koptplanner, to run the client
 Shell #2
 ```sh
-rosrun request avion_VP_generator 1000
+rosrun request avion_VP_generator <nb max of viewpoint configurations>
 ```
-where 1000 is an argument to choose the max number of viewpoints for one triangle of the mesh.
+
+To run with existing viewpoints databases:
+
+Shell #1
+```sh
+roslaunch koptplanner avoidObstacle.launch
+```
+To add an obstacle to RVIZ, you have to click on "Publish Point" on the RVIZ toolbar.
 
 
 **Beta version**

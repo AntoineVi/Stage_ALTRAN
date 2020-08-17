@@ -1,12 +1,17 @@
-NAME : inspection.13316.tour
-COMMENT : Length = 13316
-COMMENT : Found by LKH [Keld Helsgaun] Mon Aug 17 11:22:43 2020
+NAME : inspection.29446.tour
+COMMENT : Length = 29446
+COMMENT : Found by LKH [Keld Helsgaun] Mon Aug 17 11:32:36 2020
 TYPE : TOUR
-DIMENSION : 4
+DIMENSION : 9
 TOUR_SECTION
 1
 2
 3
+6
+5
 4
+7
+8
+9
 -1
 EOF
