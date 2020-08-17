@@ -139,7 +139,7 @@ void setupSystem();
 void readPath();
 void fillOctree(geometry_msgs::PoseStamped previousVP, geometry_msgs::PoseStamped vp);
 double octreeScaling(double value);
-geometry_msgs::Pose selectViewpointFromFile(std::vector<double> xs, std::vector<double> ys, std::vector<double> zs, int VP_id);
+geometry_msgs::Pose selectViewpointFromFile(std::vector<double> xs, std::vector<double> ys, std::vector<double> zs, int pathID, int boundedVP);
 bool isVisibilityBoxOK(std::vector<double> xs, std::vector<double> ys, std::vector<double> zs);
 void changeInspectionPath(int firstIDPathKO);
 void cleanVariables();
@@ -168,7 +168,7 @@ int main(int argc, char **argv)
 	obsBoxSize = 50;
 	pkgPath = ros::package::getPath("koptplanner");
 	g_security_distance = 5.0;
-	octreeSize = 32;
+	octreeSize = 128;
 	
 	readSTLfile(ros::package::getPath("request")+"/meshes/asciiavion.stl");
 	octree = new Octree<std::vector<int>>(octreeSize);
@@ -517,9 +517,9 @@ void planForHiddenTrangles() {
 
 	// Get ids from viewpoints which has the triangle hides by the obstacle box
 	// Values in the octree E [0,octreeSize]
-	for(int z=floor(octreeScaling(zmin_obs)); z<octreeSize && z<=ceil(octreeScaling(zmax_obs)); z++) {
-		for(int y=floor(octreeScaling(ymin_obs)); y<octreeSize && y<=ceil(octreeScaling(ymax_obs)); y++) {
-			for(int x=floor(octreeScaling(xmin_obs)); x<octreeSize && x<=ceil(octreeScaling(xmax_obs)); x++) {
+	for(int z=floor(octreeScaling(zmin_obs)); z>0 && z<octreeSize && z<=ceil(octreeScaling(zmax_obs)); z++) {
+		for(int y=floor(octreeScaling(ymin_obs)); y>0 && y<octreeSize && y<=ceil(octreeScaling(ymax_obs)); y++) {
+			for(int x=floor(octreeScaling(xmin_obs)); x>0 && x<octreeSize && x<=ceil(octreeScaling(xmax_obs)); x++) {
 				vectorChangedVP.insert(std::end(vectorChangedVP), std::begin((*octree)(x,y,z)), std::end((*octree)(x,y,z)));
 			}
 		}
@@ -630,23 +630,25 @@ void planForHiddenTrangles() {
 				}
 				
 				// Check if the connection between the new path and the old one is OK
-				bool testConnection = true;
+				/*bool testConnection = true;
+				int boundedVP = 0; // Not the first/last VP in the subpath
 				
 				if(i == 0) {
 					std::vector<double> xsConnection = {path[indicesPathKO[j].first+i-1].pose.position.x, path[indicesPathKO[j].first+i].pose.position.x};
-					std::vector<double> ysConnection = {path[indicesPathKO[j].first+i-1].pose.position.x, path[indicesPathKO[j].first+i].pose.position.x};
-					std::vector<double> zsConnection = {path[indicesPathKO[j].first+i-1].pose.position.x, path[indicesPathKO[j].first+i].pose.position.x};
+					std::vector<double> ysConnection = {path[indicesPathKO[j].first+i-1].pose.position.y, path[indicesPathKO[j].first+i].pose.position.y};
+					std::vector<double> zsConnection = {path[indicesPathKO[j].first+i-1].pose.position.z, path[indicesPathKO[j].first+i].pose.position.z};
 					testConnection = isVisibilityBoxOK(xsConnection, ysConnection, zsConnection);
 					
 				}
 				else if(i == maxID-1) {
 					std::vector<double> xsConnection = {path[indicesPathKO[j].first+i].pose.position.x, path[indicesPathKO[j].first+i+1].pose.position.x};
-					std::vector<double> ysConnection = {path[indicesPathKO[j].first+i].pose.position.x, path[indicesPathKO[j].first+i+1].pose.position.x};
-					std::vector<double> zsConnection = {path[indicesPathKO[j].first+i].pose.position.x, path[indicesPathKO[j].first+i+1].pose.position.x};
+					std::vector<double> ysConnection = {path[indicesPathKO[j].first+i].pose.position.y, path[indicesPathKO[j].first+i+1].pose.position.y};
+					std::vector<double> zsConnection = {path[indicesPathKO[j].first+i].pose.position.z, path[indicesPathKO[j].first+i+1].pose.position.z};
 					testConnection = isVisibilityBoxOK(xsConnection, ysConnection, zsConnection);
-				}
+				}*/
 				
-				if(testConnection && isVisibilityBoxOK(xs, ys, zs)) {
+				//if(testConnection && isVisibilityBoxOK(xs, ys, zs)) {
+				if(isVisibilityBoxOK(xs, ys, zs)) {
 					tf::Pose pose;
 					tf::poseMsgToTF(path[indicesPathKO[j].first+i].pose, pose);
 		
@@ -661,7 +663,7 @@ void planForHiddenTrangles() {
 					ys.pop_back();
 					zs.pop_back();
 			
-					geometry_msgs::Pose newVP = selectViewpointFromFile(xs, ys, zs, path[indicesPathKO[j].first+i].header.seq);
+					geometry_msgs::Pose newVP = selectViewpointFromFile(xs, ys, zs, indicesPathKO[j].first+i, 0);
 					tf::Pose pose;
 					tf::poseMsgToTF(newVP, pose);
 	
@@ -708,6 +710,7 @@ void planForHiddenTrangles() {
 				//params += "PATCHING_A=2\n";
 				//params += "RUNS=1\n";
 				//params += "TIME_LIMIT=5\n";
+				params += "MAX_TRIALS=100	\n";
 				params += "TRACE_LEVEL=0\n";
 				params += "OUTPUT_TOUR_FILE="+pkgPath+"/data/tempTour.txt\n";
 				params += "EOF";
@@ -825,12 +828,28 @@ bool isVisibilityBoxOK(std::vector<double> xs, std::vector<double> ys, std::vect
 			zmin_obs < *minmaxZ.first && zmax_obs < *minmaxZ.first || zmin_obs > *minmaxZ.second && zmax_obs > *minmaxZ.second);
 }
 
-geometry_msgs::Pose selectViewpointFromFile(std::vector<double> xs, std::vector<double> ys, std::vector<double> zs, int VP_id) {
+geometry_msgs::Pose selectViewpointFromFile(std::vector<double> xs, std::vector<double> ys, std::vector<double> zs, int pathID, int boundedVP) {
 	bool VP_OK = false;
 	std::string line;
 	geometry_msgs::Pose VPtmp;
+	/*std::vector<double> xsConnection;
+	std::vector<double> ysConnection;
+	std::vector<double> zsConnection;
 	
-	file.open((pkgPath+"/viewpoints/viewpoint_"+std::to_string(VP_id)+".txt").c_str());
+	// boundedVP = 1 => First viewpoint in the subpath
+	// boundedVP = 2 => Last viewpoint in the subpath
+	if(boundedVP == 1) {
+		xsConnection = {path[pathID-1].pose.position.x};
+		ysConnection = {path[pathID-1].pose.position.y};
+		zsConnection = {path[pathID-1].pose.position.z};
+	}
+	else if(boundedVP == 2) {
+		xsConnection = {path[pathID+1].pose.position.x};
+		ysConnection = {path[pathID+1].pose.position.y};
+		zsConnection = {path[pathID+1].pose.position.z};
+	}*/
+	
+	file.open((pkgPath+"/viewpoints/viewpoint_"+std::to_string(path[pathID].header.seq)+".txt").c_str());
 	if (file.is_open())	{
 		while(!VP_OK && getline(file,line)) {
 			std::vector<std::string> pose;
@@ -851,10 +870,17 @@ geometry_msgs::Pose selectViewpointFromFile(std::vector<double> xs, std::vector<
 			
 			VP_OK = isVisibilityBoxOK(xs, ys, zs);
 			
+			/*if(boundedVP > 0) {				
+				VP_OK &= isVisibilityBoxOK(xsConnection, ysConnection, zsConnection);
+			}*/				
+			
 			if(!VP_OK) {
 				xs.pop_back();
 				ys.pop_back();
 				zs.pop_back();
+				/*xsConnection.pop_back();
+				ysConnection.pop_back();
+				zsConnection.pop_back();*/
 			}
 		}
 		file.close();
@@ -863,12 +889,12 @@ geometry_msgs::Pose selectViewpointFromFile(std::vector<double> xs, std::vector<
 			return VPtmp;
 		}
 		else {
-			ROS_ERROR("No collision free viewpoint for triangle %d", VP_id);
+			ROS_ERROR("No collision free viewpoint for triangle %d", path[pathID].header.seq);
 			ros::shutdown();
 		}
 	}
 	else {
-		ROS_ERROR("Viewpoint %d file not found", VP_id);
+		ROS_ERROR("Viewpoint %d file not found", path[pathID].header.seq);
 		ros::shutdown();
 	}
 }
@@ -881,7 +907,7 @@ void changeInspectionPath(int firstIDPathKO) {
 	std::vector<geometry_msgs::PoseStamped> waypoints;
 	int waypointID = 0;
 	
-	for(std::vector<geometry_msgs::PoseStamped>::iterator it = res_g->inspectionPath.poses.begin(); it != res_g->inspectionPath.poses.end()-1; it++) {
+	for(std::vector<geometry_msgs::PoseStamped>::iterator it = res_g->inspectionPath.poses.begin(); it != res_g->inspectionPath.poses.end(); it++) {
 		if(it->pose.position.x != (it+1)->pose.position.x && it->pose.position.y != (it+1)->pose.position.y && it->pose.position.z != (it+1)->pose.position.z) {
 			int j;
 			for(j=0; j<maxID; j++) {
@@ -893,7 +919,7 @@ void changeInspectionPath(int firstIDPathKO) {
 					std::fabs(VP[j][2] - it->pose.position.z) < threshold /*&&
 					std::fabs(VP[j][3] - tf::getYaw(pose.getRotation())) < threshold*/) {
 
-					//ROS_INFO("i:%d, ID:%d, x:%f, y:%f, z:%f", indPath, path[firstIDPathKO+j].header.seq, it->pose.position.x, it->pose.position.y, it->pose.position.z);
+					ROS_INFO("i:%d, ID:%d, x:%f, y:%f, z:%f", indPath, path[firstIDPathKO+j].header.seq, it->pose.position.x, it->pose.position.y, it->pose.position.z);
 
 					// Change the path configuration for the VP
 					VPnewIDs.push_back(path[firstIDPathKO+j].header.seq);
@@ -904,7 +930,7 @@ void changeInspectionPath(int firstIDPathKO) {
 					path[indPath].pose.orientation.y = it->pose.orientation.y;
 					path[indPath].pose.orientation.z = it->pose.orientation.z;
 					path[indPath].pose.orientation.w = it->pose.orientation.w;
-					//indPath++;
+					indPath++;
 					break;
 				}
 			}
@@ -912,27 +938,28 @@ void changeInspectionPath(int firstIDPathKO) {
 				ROS_INFO("Add waypoint: x:%f, y:%f, z:%f", it->pose.position.x, it->pose.position.y, it->pose.position.z);
 				// LKH may add waypoints to avoid the obstacle
 				VPnewIDs.push_back(path.size()+waypointID);
-				it->header.seq = path.size()+waypointID;
 				waypointID++;
 				publishViewpoint(*it);
 				waypoints.push_back(*it);
 			}
-			indPath++;
+			//indPath++;
 		}
 	}
 	
 	// Change the IDs. Not done before to keep the match with VP[]
 	int oldPathSize = path.size();
 	int cptWPs = 0;
-	
-	for(int i=VPnewIDs.size()-1; i>0; i--) {
+		
+	for(int i=0; i<VPnewIDs.size(); i++) {
 		if(VPnewIDs[i] >= oldPathSize) {
-			path.insert(path.begin()+firstIDPathKO+i+cptWPs, waypoints[0]);
+			path.insert(path.begin()+firstIDPathKO+i, waypoints[0]);
+			path[firstIDPathKO+i].header.seq = VPnewIDs[i];
 			waypoints.erase(waypoints.begin());
 			cptWPs++;
 		}
 		else
-			path[firstIDPathKO+i+cptWPs].header.seq = VPnewIDs[i];
+			path[firstIDPathKO+i].header.seq = VPnewIDs[i];
+		//publishViewpoint(path[firstIDPathKO+i+cptWPs]);
 	}
 }
 
@@ -1209,12 +1236,11 @@ void checkNewTourFile() {
 		ros::shutdown();
 	}	
 	file.close();
-	if(!allVPsID.empty()) {
-		ROS_ERROR("Missing VPs!");
-		for(int i=0; i<allVPsID.size();i++)
-			ROS_ERROR("VP:%d", allVPsID[i]);
-		//generateNewTourFile();
-		ros::shutdown();
+	for(int i=0; i<allVPsID.size();i++) {
+		if(allVPsID[i] < 396) {
+			ROS_ERROR("Missing VP:%d!", allVPsID[i]);
+			ros::shutdown();
+		}
 	}
 	
 }
