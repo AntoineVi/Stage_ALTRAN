@@ -3,12 +3,14 @@ StructuralInspectionPlanner
 Antoine:
 ---------------------------
 To generate databases of viewpoints
+
 Shell #1
 ```sh
 roslaunch koptplanner viewpoints_generator.launch
 ```
 
 As koptplanner, to run the client
+
 Shell #2
 ```sh
 rosrun request avion_VP_generator <nb max of viewpoint configurations>
