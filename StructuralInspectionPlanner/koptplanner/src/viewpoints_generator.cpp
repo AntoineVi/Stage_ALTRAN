@@ -101,6 +101,8 @@ std::vector<nav_msgs::Path>* mesh;
 void publishViewpoint(StateVector stateVP, int VP_id, double blue);
 void readSTLfile(std::string name);
 void publishStl();
+std::vector<geometry_msgs::PoseStamped> readPath();
+double euclideanDistance(geometry_msgs::PoseStamped pt1, StateVector pt2);
 
 bool viewpointsGenerator(koptplanner::inspection::Request  &req, koptplanner::inspection::Response &res);
 
@@ -555,8 +557,10 @@ bool viewpointsGenerator(koptplanner::inspection::Request  &req, koptplanner::in
 		reinitRRTs[q] = 1;
 	}
 	
-	ROS_INFO("Start AGP");
 	/* -------- ART -- GALLERY -------- */
+	ROS_INFO("Start AGP");
+	std::vector<geometry_msgs::PoseStamped> path = readPath();
+	
 	for(int i = 0; i < maxID; i++)
 	{
 		StateVector * s1 = NULL;
@@ -577,28 +581,58 @@ bool viewpointsGenerator(koptplanner::inspection::Request  &req, koptplanner::in
 		s2 = NULL;
 		
 		ROS_INFO("%d VPs for triangle %d", (int) gVect.size(), i);
-		for(int j=gVect.size()-1; j>=0; j--) {
-			//publishViewpoint(gVect[j], i*1000+j, float(i)/gVect.size());				
+		
+		if(gVect.size() > 0) {
+			std::vector<StateVector> gVectSorted = {gVect[0]};
+			for(int k=1; k<gVect.size(); k++) {
+				for(int l=0; l<gVectSorted.size(); l++) {
+					if(euclideanDistance(path[i], gVect[k]) < euclideanDistance(path[i], gVectSorted[l])) {
+						gVectSorted.insert(gVectSorted.begin()+l, gVect[k]);
+						l = gVectSorted.size();
+					}
+				}
+				if(std::find(gVectSorted.begin(), gVectSorted.end(), gVect[k]) == gVectSorted.end())
+					gVectSorted.push_back(gVect[k]);
+			}
+		
+			for(int j=0; j<gVectSorted.size(); j++) {			
 
-			file.open((pkgPath+"/viewpoints/viewpoint_"+std::to_string(i)+".txt").c_str(), std::ios::app | std::ios::out);
-			if(!file.is_open())
+				file.open((pkgPath+"/viewpoints/viewpoint_"+std::to_string(i)+".txt").c_str(), std::ios::app | std::ios::out);
+				if(!file.is_open()) {
+					ROS_ERROR("Could not open viewpoint file");
+					ros::shutdown();
+				}
+
+				file << std::setprecision(8) << std::to_string(gVectSorted[j][0])+"\t";
+				file << std::setprecision(8) << std::to_string(gVectSorted[j][1])+"\t";
+				file << std::setprecision(8) << std::to_string(gVectSorted[j][2])+"\t";
+	#if DIMENSIONALITY>4
+				tf::Quaternion q = tf::createQuaternionFromRPY(gVectSorted[j][3],gVectSorted[j][4],gVectSorted[j][5]);
+	#else
+				tf::Quaternion q = tf::createQuaternionFromRPY(0.0,0.0,gVectSorted[j][3]);
+	#endif
+				file << std::setprecision(8) << q.x() << "\t";
+				file << std::setprecision(8) << q.y() << "\t";
+				file << std::setprecision(8) << q.z() << "\t";
+				file << std::setprecision(8) << q.w() << "\n";
+				file.close();
+			}
+			gVectSorted.clear();
+		
+			file.open((pkgPath+"/viewpoints/viewpoint_"+std::to_string(path[i].header.seq)+".txt").c_str(), std::ios::app | std::ios::out);
+			if(!file.is_open()) {
 				ROS_ERROR("Could not open viewpoint file");
-
-			file << std::setprecision(8) << std::to_string(gVect[j][0])+"\t";
-			file << std::setprecision(8) << std::to_string(gVect[j][1])+"\t";
-			file << std::setprecision(8) << std::to_string(gVect[j][2])+"\t";
-#if DIMENSIONALITY>4
-			tf::Quaternion q = tf::createQuaternionFromRPY(gVect[j][3],gVect[j][4],gVect[j][5]);
-#else
-			tf::Quaternion q = tf::createQuaternionFromRPY(0.0,0.0,gVect[j][3]);
-#endif
-			file << std::setprecision(8) << q.x() << "\t";
-			file << std::setprecision(8) << q.y() << "\t";
-			file << std::setprecision(8) << q.z() << "\t";
-			file << std::setprecision(8) << q.w() << "\n";
+				ros::shutdown();
+			}
+			file << std::setprecision(8) << std::to_string(path[i].pose.position.x) << "\t";
+			file << std::setprecision(8) << std::to_string(path[i].pose.position.y) << "\t";
+			file << std::setprecision(8) << std::to_string(path[i].pose.position.z) << "\t";
+			file << std::setprecision(8) << std::to_string(path[i].pose.orientation.x) << "\t";
+			file << std::setprecision(8) << std::to_string(path[i].pose.orientation.y) << "\t";
+			file << std::setprecision(8) << std::to_string(path[i].pose.orientation.z) << "\t";
+			file << std::setprecision(8) << std::to_string(path[i].pose.orientation.w) << "\n";
 			file.close();
 		}
-		gVect.clear();
 	}    
 
 	if(koptError != SUCCESSFUL)	{
@@ -641,6 +675,46 @@ bool viewpointsGenerator(koptplanner::inspection::Request  &req, koptplanner::in
 	tri_t::initialized = false;
 			
 	return koptError == SUCCESSFUL;
+}
+
+double euclideanDistance(geometry_msgs::PoseStamped pt1, StateVector pt2) {
+	return sqrt(SQ(pt2[0]-pt1.pose.position.x)+SQ(pt2[1]-pt1.pose.position.y)+SQ(pt2[2]-pt1.pose.position.z));
+}
+
+std::vector<geometry_msgs::PoseStamped> readPath() {
+	std::string line;
+	std::vector<geometry_msgs::PoseStamped> path;
+	
+	file.open(pkgPath+"/data/tourSAVE.txt");
+	if (file.is_open())	{
+		while(getline(file,line)) {
+			// Fill vector<VPconfig>
+			geometry_msgs::PoseStamped tmpPose;			
+			std::vector<std::string> poseStr;
+			
+			boost::split(poseStr, line, boost::is_any_of("\t"));
+			
+			tmpPose.header.seq = std::atoi(poseStr[0].c_str());
+			tmpPose.header.stamp = ros::Time::now();
+			tmpPose.header.frame_id = "/kopt_frame";
+			
+			tmpPose.pose.position.x = std::atof(poseStr[1].c_str());
+			tmpPose.pose.position.y = std::atof(poseStr[2].c_str());
+			tmpPose.pose.position.z = std::atof(poseStr[3].c_str());
+			tmpPose.pose.orientation.x = std::atof(poseStr[4].c_str());
+			tmpPose.pose.orientation.y = std::atof(poseStr[5].c_str());
+			tmpPose.pose.orientation.z = std::atof(poseStr[6].c_str());
+			tmpPose.pose.orientation.w = std::atof(poseStr[7].c_str());
+			
+			path.push_back(tmpPose);
+		}
+	}
+	else {
+		ROS_ERROR("Error on path file");
+		ros::shutdown();
+	}
+	
+	return path;
 }
 
 void readSTLfile(std::string name) {

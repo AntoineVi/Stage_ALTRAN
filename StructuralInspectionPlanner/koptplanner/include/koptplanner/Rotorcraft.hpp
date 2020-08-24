@@ -701,9 +701,12 @@ Vector_t Rotorcraft::Triangle<System_t, State_t, Vector_t, region_t>::dualBarrie
     
     if(std::find(gVect.begin(), gVect.end(), g) == gVect.end())
     	gVect.push_back(g);
-    	
+        
     if(this->VPSolver->getObjVal()+xxCompensate+costOrientation<cost && solFoundLocal)
     {
+      //if(std::find(gVect.begin(), gVect.end(), g) == gVect.end())
+    	//gVect.push_back(g);
+      
       best = g;
       cost = this->VPSolver->getObjVal()+xxCompensate+costOrientation;
     }
