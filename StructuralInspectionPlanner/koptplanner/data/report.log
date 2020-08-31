@@ -13,3 +13,5 @@ Yaw rate:		0.5rad/s
 Field of view [h,v]:	[2.0944, 2.0944]rad
 Camera pitch:		0.436332rad
 
+-->Infeasible connection between viewpoints
+(0, 0, 100) and (39.8589, -29.8683, 30.344)

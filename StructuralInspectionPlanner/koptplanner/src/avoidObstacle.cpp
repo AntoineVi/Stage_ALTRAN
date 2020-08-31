@@ -46,6 +46,7 @@
 	long time_RRTS;
 	long time_RRTS_req;
 	long time_LKH;
+	long time_LKH_ALL;
 	long time_READ;
 	long time_CHANGE_PATH;
 #endif
@@ -171,6 +172,11 @@ int main(int argc, char **argv)
 	g_security_distance = 5.0;
 	octreeSize = 32;
 	
+	/*Gain23Static = 0;
+	GreedyTourmark = 0;
+	SFCTourRank = 0;
+	ReadPenaltiesStatic = 0;*/
+	
 	readSTLfile(ros::package::getPath("request")+"/meshes/asciiavion.stl");
 	octree = new Octree<std::vector<int>>(octreeSize);
 	
@@ -193,7 +199,7 @@ int main(int argc, char **argv)
 	marker_pubINIT.publish(p);
 	
 	publishStl();
-	publishPath();	
+	publishPath();
 
 	ROS_INFO("Ready to receive obstacle pose from Publish point on RVIZ");
 	
@@ -497,6 +503,7 @@ void setupSystem() {
 	time_RRTS = 0;
 	time_RRTS_req = 0;
 	time_LKH = 0;
+	time_LKH_ALL = 0;
 	time_READ = 0;
 	time_CHANGE_PATH = 0;
 #endif
@@ -529,10 +536,10 @@ void setupSystem() {
 
 void planForHiddenTrangles() {
 #ifdef __TIMING_INFO__
-		timeval time;
-		gettimeofday(&time, NULL);
-		millisecStart = time.tv_sec * 1000 + time.tv_usec / 1000;
-		time_start = millisecStart;
+	timeval time;
+	gettimeofday(&time, NULL);
+	millisecStart = time.tv_sec * 1000 + time.tv_usec / 1000;
+	time_start = millisecStart;
 #endif
 
 	// Get ids from viewpoints which has the triangle hides by the obstacle box
@@ -587,7 +594,14 @@ void planForHiddenTrangles() {
 			else {
 				if(cptVP_KO > 0) {
 					boundsPathKO.second = i;
-					indicesPathKO.push_back(boundsPathKO);
+					for(int j=0; !ros::isShuttingDown() && j<indicesPathKO.size();j++) {
+						if(indicesPathKO[j].second-indicesPathKO[j].first > boundsPathKO.second-boundsPathKO.first) {
+							indicesPathKO.insert(indicesPathKO.begin()+j, boundsPathKO);
+							break;
+						}
+					}
+					if(std::find(indicesPathKO.begin(), indicesPathKO.end(), boundsPathKO) == indicesPathKO.end())
+						indicesPathKO.push_back(boundsPathKO);
 						
 					vectorChangedVP.insert(vectorChangedVP.begin()+cptVP_KO, path[i].header.seq);
 					cptVP_KO = 0;
@@ -685,106 +699,104 @@ void planForHiddenTrangles() {
 			gettimeofday(&time, NULL);
 			time_READ += time.tv_sec * 1000000 + time.tv_usec;
 #endif
-			if(maxID > 3) {
-				// static function variable reset variables:
-				Gain23Static = 0;
-				GreedyTourmark = 0;
-				SFCTourRank = 0;
-				ReadPenaltiesStatic = 0;
-			
-				double ** vals = new double* [maxID];
-			
-				if(reinitRRTs==NULL)
-					reinitRRTs = new int[maxID];
-				for(int i = 0; i<maxID; i++) {
-					reinitRRTs[i] = 1;
-					vals[i] = new double[3];
-					vals[i][0] = VP[i][0]*g_scale;
-					vals[i][1] = VP[i][1]*g_scale;
-					vals[i][2] = VP[i][2]*g_scale;
-				}
-			
-				/* use provided interface of the TSP solver */
-				std::string params = "MOVE_TYPE=5\n";
-				params += "PRECISION=1\n";
-				//params += "PATCHING_C=3\n";
-				//params += "PATCHING_A=2\n";
-				//params += "RUNS=1\n";
-				//params += "TIME_LIMIT=5\n";
-				params += "MAX_TRIALS=1000	\n";
-				params += "TRACE_LEVEL=0\n";
-				params += "OUTPUT_TOUR_FILE="+pkgPath+"/data/tempTour.txt\n";
-				params += "EOF";
-
-				std::string prob = "NAME:inspection\n";
-#ifdef USE_FIXEDWING_MODEL
-				prob += "TYPE:ATSP\n";
-				prob += "EDGE_WEIGHT_FORMAT:FULL_MATRIX\n";
-				prob += "EDGE_WEIGHT_TYPE:RRTFIXEDWING_3D\n";
-#else
-				prob += "TYPE:TSP\n";
-				prob += "EDGE_WEIGHT_TYPE:RRT_3D\n";
-#endif
-				std::stringstream ss; ss<<maxID;
-				prob += "DIMENSION:"+ss.str()+"\n";
-				prob += "FIXED_EDGES_SECTION\n"+ss.str()+" 1\n-1\n";
-				prob += "NODE_COORD_SECTION\n";
-				prob += "EOF";
-#ifdef __TIMING_INFO__
-				gettimeofday(&time, NULL);
-				time_LKH -= time.tv_sec * 1000000 + time.tv_usec;
-#endif
-				size_t length = params.length();
-				char * par;
-				assert(par = (char*) malloc(length+10));
-				strcpy(par, params.c_str());
-				length = prob.length();
-				char * pro;
-				assert(pro = (char*) malloc(length+10));
-				strcpy(pro, prob.c_str());
-
-				/* call TSP solver */
-				ROS_INFO("Start LKH");
-				LKHmainFunction(maxID,vals,par,pro);
-			
-				while(!ros::isShuttingDown() && res_g->inspectionPath.poses.empty());
-#ifdef __TIMING_INFO__
-				gettimeofday(&time, NULL);
-				time_LKH += time.tv_sec * 1000000 + time.tv_usec;
-#endif
-				for(int i = 0; i<maxID; i++) {
-					delete[] vals[i];
-					delete plannerArray[i];
-				}
-				delete[] vals;
-				vals = NULL;
-				delete[] plannerArray;
-				plannerArray = NULL;
-				delete[] reinitRRTs;
-				reinitRRTs = NULL;				
-				plannerArrayBool = false;
-				g_cost = DBL_MAX;
+			// static function variable reset variables:
+			Gain23Static = 0;
+			GreedyTourmark = 0;
+			SFCTourRank = 0;
+			ReadPenaltiesStatic = 0;
+		
+			double ** vals = new double* [maxID];
+		
+			if(reinitRRTs==NULL)
+				reinitRRTs = new int[maxID];
+			for(int i = 0; i<maxID; i++) {
+				reinitRRTs[i] = 1;
+				vals[i] = new double[3];
+				vals[i][0] = VP[i][0]*g_scale;
+				vals[i][1] = VP[i][1]*g_scale;
+				vals[i][2] = VP[i][2]*g_scale;
 			}
+		
+			/* use provided interface of the TSP solver */
+			std::string params = "MOVE_TYPE=5\n";
+			params += "GAIN23=NO\n";
+			params += "PRECISION=1\n";
+			params += "PATCHING_C=3\n";
+			params += "PATCHING_A=2\n";
+			params += "RUNS=1\n";
+			params += "TIME_LIMIT=5\n";
+			params += "TRACE_LEVEL=0\n";
+			params += "OUTPUT_TOUR_FILE="+pkgPath+"/data/tempTour.txt\n";
+			params += "EOF";
+
+			std::string prob = "NAME:inspection\n";
+#ifdef USE_FIXEDWING_MODEL
+			prob += "TYPE:ATSP\n";
+			prob += "EDGE_WEIGHT_FORMAT:FULL_MATRIX\n";
+			prob += "EDGE_WEIGHT_TYPE:RRTFIXEDWING_3D\n";
+#else
+			prob += "TYPE:TSP\n";
+			prob += "EDGE_WEIGHT_TYPE:RRT_3D\n";
+#endif
+			std::stringstream ss; ss<<maxID;
+			prob += "DIMENSION:"+ss.str()+"\n";
+			prob += "FIXED_EDGES_SECTION\n"+ss.str()+" 1\n-1\n";
+			prob += "NODE_COORD_SECTION\n";
+			prob += "EOF";
+			
+#ifdef __TIMING_INFO__
+			gettimeofday(&time, NULL);
+			time_LKH -= time.tv_sec * 1000000 + time.tv_usec;
+			time_LKH_ALL -= time.tv_sec * 1000000 + time.tv_usec;
+#endif
+			size_t length = params.length();
+			char * par;
+			assert(par = (char*) malloc(length+10));
+			strcpy(par, params.c_str());
+			length = prob.length();
+			char * pro;
+			assert(pro = (char*) malloc(length+10));
+			strcpy(pro, prob.c_str());
+
+			/* call TSP solver */
+			ROS_INFO("Start LKH");
+			LKHmainFunction(maxID,vals,par,pro);
+		
+			while(!ros::isShuttingDown() && res_g->inspectionPath.poses.empty());
+#ifdef __TIMING_INFO__
+			gettimeofday(&time, NULL);
+			time_LKH += time.tv_sec * 1000000 + time.tv_usec;
+			time_LKH_ALL += time.tv_sec * 1000000 + time.tv_usec;
+#endif
+			for(int i = 0; i<maxID; i++) {
+				delete[] vals[i];
+				delete plannerArray[i];
+			}
+			delete[] vals;
+			vals = NULL;
+			delete[] plannerArray;
+			plannerArray = NULL;
+			delete[] reinitRRTs;
+			reinitRRTs = NULL;				
+			plannerArrayBool = false;
+			/* initialize problem setup */
+			g_cost = DBL_MAX;
+#ifdef __TIMING_INFO__
+			time_DBS = 0;
+			time_RRTS = 0;
+			time_RRTS_req = 0;
+			time_LKH = 0;
+#endif
+			time_start = 0;
+			delete par;
+			delete pro;
 
 #ifdef __TIMING_INFO__
 			gettimeofday(&time, NULL);
 			time_CHANGE_PATH -= time.tv_sec * 1000000 + time.tv_usec;
 #endif
 			ROS_INFO("CHANGE PATH");
-			// If only one viewpoint has changed, not need to use the LKH, only change the configuration in path
-			if(!res_g->inspectionPath.poses.empty())
-				changeInspectionPath(indicesPathKO[j].first);
-			else {
-				tf::Quaternion q = tf::createQuaternionFromRPY(0,0,VP[1][3]);
-			
-				path[indicesPathKO[j].first+1].pose.position.x = VP[1][0];
-				path[indicesPathKO[j].first+1].pose.position.y = VP[1][1];
-				path[indicesPathKO[j].first+1].pose.position.z = VP[1][2];
-				path[indicesPathKO[j].first+1].pose.orientation.x = q.x();
-				path[indicesPathKO[j].first+1].pose.orientation.y = q.y();
-				path[indicesPathKO[j].first+1].pose.orientation.z = q.z();
-				path[indicesPathKO[j].first+1].pose.orientation.w = q.w();
-			}			
+			changeInspectionPath(indicesPathKO[j].first);	
 	
 #ifdef __TIMING_INFO__
 			gettimeofday(&time, NULL);
@@ -793,6 +805,8 @@ void planForHiddenTrangles() {
 			delete[] VP;
 			VP = NULL;
 			res_g->inspectionPath.poses.clear();
+			
+			//ros::Duration(0.5).sleep();
 		}
 	}
 	else
@@ -807,7 +821,7 @@ void planForHiddenTrangles() {
 	gettimeofday(&time, NULL);
 	ROS_INFO("Calculation time was:\t\t\t%i ms", (int)((long)(time.tv_sec * 1000 + time.tv_usec / 1000) - millisecStart));
 	ROS_INFO("Choice VPs time consumption:\t\t%i ms", (int)(time_READ/1000));
-	ROS_INFO("LKH time consumption:\t\t\t%i ms", (int)(time_LKH/1000));
+	ROS_INFO("LKH time consumption:\t\t\t%i ms", (int)(time_LKH_ALL/1000));
 	ROS_INFO("Change of path time consumption:\t%i ms", (int)(time_CHANGE_PATH/1000));
 	ROS_INFO("Initial RRT* time consumption:\t\t%i ms", (int)(time_RRTS/1000));
 	ROS_INFO("Distance evaluation time:\t\t%i ms", (int)(time_RRTS_req/1000));
