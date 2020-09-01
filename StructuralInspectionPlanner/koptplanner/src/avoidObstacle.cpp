@@ -140,7 +140,9 @@ void setupSystem();
 void readPath();
 void fillOctree(geometry_msgs::PoseStamped previousVP, geometry_msgs::PoseStamped vp);
 double octreeScaling(double value);
-geometry_msgs::Pose selectViewpointFromFile(std::vector<double> xs, std::vector<double> ys, std::vector<double> zs, int pathID, int boundedVP);
+double reverseOctreeScaling(double value);
+geometry_msgs::Pose selectViewpointFromFile(std::vector<double> xs, std::vector<double> ys, std::vector<double> zs, int pathID);
+geometry_msgs::Pose selectViewpointFromFileOctree(std::vector<double> xs, std::vector<double> ys, std::vector<double> zs, int pathID, int idBoundedVP);
 bool isVisibilityBoxOK(std::vector<double> xs, std::vector<double> ys, std::vector<double> zs);
 void changeInspectionPath(int firstIDPathKO);
 void cleanVariables();
@@ -381,6 +383,10 @@ void fillOctree(geometry_msgs::PoseStamped previousVP, geometry_msgs::PoseStampe
 
 double octreeScaling(double value) {
 	return value*(octreeSize-1)/spaceSize[0]+(octreeSize-1)/2.0;
+}
+
+double reverseOctreeScaling(double value) {
+	return value*spaceSize[0]/(octreeSize-1)+spaceSize[0]/2.0;
 }
 
 void setupSystem() {
@@ -678,7 +684,8 @@ void planForHiddenTrangles() {
 					ys.pop_back();
 					zs.pop_back();
 			
-					geometry_msgs::Pose newVP = selectViewpointFromFile(xs, ys, zs, indicesPathKO[j].first+i, 0);
+					geometry_msgs::Pose newVP = selectViewpointFromFile(xs, ys, zs, indicesPathKO[j].first+i);
+					//geometry_msgs::Pose newVP = selectViewpointFromFileOctree(xs, ys, zs, indicesPathKO[j].first+i, indicesPathKO[j].first);
 					tf::Pose pose;
 					tf::poseMsgToTF(newVP, pose);
 	
@@ -842,14 +849,73 @@ bool isVisibilityBoxOK(std::vector<double> xs, std::vector<double> ys, std::vect
 			ymin_obs < *minmaxY.first && ymax_obs < *minmaxY.first || ymin_obs > *minmaxY.second && ymax_obs > *minmaxY.second ||
 			zmin_obs < *minmaxZ.first && zmax_obs < *minmaxZ.first || zmin_obs > *minmaxZ.second && zmax_obs > *minmaxZ.second);
 }
+/*
+geometry_msgs::Pose selectViewpointFromFileOctree(std::vector<double> xs, std::vector<double> ys, std::vector<double> zs, int pathID, int boundedID) {
+	bool VP_OK = false;
+	geometry_msgs::Pose VPtmp;
+	
+	file.open((pkgPath+"/viewpoints/viewpoint_"+std::to_string(path[pathID].header.seq)+".txt").c_str(), std::ios::in);
+	if (file.is_open())	{
+		Octree<int> octreeVP(1024);
+		octreeVP.readBinary(file);
+		
+		for(int z=octreeScaling(path[boundedID].pose.position.z); z<1024; z++) {
+			for(int y=octreeScaling(path[boundedID].pose.position.y); y<1024; y++) {
+				for(int x=octreeScaling(path[boundedID].pose.position.x); x<1024; x++) {
+					if(octreeVP.at(x,y,z) == 1)
+				}
+			}
+		}
+	}
+		
+		while(!VP_OK && getline(file,line)) {
+			std::vector<std::string> pose;
+			boost::split(pose, line, boost::is_any_of("\t"));
 
-geometry_msgs::Pose selectViewpointFromFile(std::vector<double> xs, std::vector<double> ys, std::vector<double> zs, int pathID, int boundedVP) {
+			// StateVector for Rotorcraft = [x,y,z,yaw]
+			VPtmp.position.x = std::atof(pose[0].c_str());
+			VPtmp.position.y = std::atof(pose[1].c_str());
+			VPtmp.position.z = std::atof(pose[2].c_str());
+			VPtmp.orientation.x = std::atof(pose[3].c_str());
+			VPtmp.orientation.y = std::atof(pose[4].c_str());
+			VPtmp.orientation.z = std::atof(pose[5].c_str());
+			VPtmp.orientation.w = std::atof(pose[6].c_str());
+			
+			xs.push_back(VPtmp.position.x); 
+			ys.push_back(VPtmp.position.y);			
+			zs.push_back(VPtmp.position.z);
+			
+			VP_OK = isVisibilityBoxOK(xs, ys, zs);
+			
+			if(!VP_OK) {
+				xs.pop_back();
+				ys.pop_back();
+				zs.pop_back();
+			}
+		}
+		file.close();
+		
+		if(VP_OK) {
+			return VPtmp;
+		}
+		else {
+			ROS_ERROR("No collision free viewpoint for triangle %d", path[pathID].header.seq);
+			ros::shutdown();
+		}
+	}
+	else {
+		ROS_ERROR("Viewpoint %d file not found", path[pathID].header.seq);
+		ros::shutdown();
+	}
+}*/
+
+geometry_msgs::Pose selectViewpointFromFile(std::vector<double> xs, std::vector<double> ys, std::vector<double> zs, int pathID) {
 	bool VP_OK = false;
 	std::string line;
 	geometry_msgs::Pose VPtmp;
 
 	
-	file.open((pkgPath+"/viewpoints/viewpoint_"+std::to_string(path[pathID].header.seq)+".txt").c_str());
+	file.open((pkgPath+"/viewpoints/viewpoint_"+std::to_string(path[pathID].header.seq)+".txt").c_str(), std::ios::in);
 	if (file.is_open())	{
 		while(!VP_OK && getline(file,line)) {
 			std::vector<std::string> pose;

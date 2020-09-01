@@ -92,7 +92,7 @@ int main(int argc, char **argv)
   /* publish STL file to rviz */
   for(std::vector<nav_msgs::Path>::iterator it = mesh->begin(); it != mesh->end() && ros::ok(); it++)
   {
-    //stl_pub.publish(*it);
+    stl_pub.publish(*it);
     geometry_msgs::Polygon p;
     geometry_msgs::Point32 p32;
     p32.x = it->poses[0].pose.position.x;
