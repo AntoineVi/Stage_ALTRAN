@@ -782,7 +782,6 @@ void saveConfigsAndMakeTourFile() {
 			for(int i=0; i<maxID; i++) {
 				for(std::vector<StateVector>::iterator itVP = matrixVPs[i].begin(); itVP != matrixVPs[i].end(); itVP++) {
 					if( (*itVP)[0] == it->pose.position.x && (*itVP)[1] == it->pose.position.y && (*itVP)[2] == it->pose.position.z) {
-						ROS_INFO("VP: ID:%d, x:%f, y:%f, z:%f", i, (*itVP)[0], (*itVP)[1], (*itVP)[2]);
 						fileTour << std::setprecision(8) << std::to_string(i)+"\t";
 						fileTour << std::setprecision(8) << std::to_string((*itVP)[0])+"\t";
 						fileTour << std::setprecision(8) << std::to_string((*itVP)[1])+"\t";

@@ -20,7 +20,7 @@ std::vector<nav_msgs::Path> * readSTLfile(std::string name, double meshBounds[],
 int main(int argc, char **argv)
 {
   ros::init(argc, argv, "a380");
-  ROS_INFO("a380 is alive");
+  ROS_INFO("avion is alive");
   if (argc < 2)
   {
     ROS_INFO("usage: plan numiterations");
@@ -47,10 +47,10 @@ int main(int argc, char **argv)
   /* parameters for the path calculation (such as may change during mission) */
   koptplanner::inspection srv;
   srv.request.incidenceAngle = M_PI/6.0;
-  srv.request.minDist = 1.0;
+  srv.request.minDist = std::stof(argv[1]);
   srv.request.maxDist = 500.0;
   ROS_INFO("minDist:%f, maxDist:%f, incidenceAngle:%f", srv.request.minDist, srv.request.maxDist, srv.request.incidenceAngle);
-  srv.request.numIterations = std::stof(argv[1]);
+  srv.request.numIterations = std::stof(argv[2]);
   ROS_INFO("Iterations:%d", srv.request.numIterations);
 
   /* define the bounding box */
