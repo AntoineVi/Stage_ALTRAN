@@ -97,7 +97,7 @@ namespace Rotorcraft
      * 
      * \return Newly sampled viewpoint state
      */
-    Vector_t dualBarrierSampling_vect(Vector_t* state1, Vector_t* state2, Vector_t* statePrev, std::vector<Vector_t>& gVect);
+    Vector_t dualBarrierSampling_vect(Vector_t* state1, Vector_t* state2, Vector_t* statePrev, std::vector<Vector_t>& gVect, int numIterations);
     
     /*!
      * \brief Support function for viewpoint sampling

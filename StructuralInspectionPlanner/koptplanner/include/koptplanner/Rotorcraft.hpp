@@ -470,7 +470,7 @@ Vector_t Rotorcraft::Triangle<System_t, State_t, Vector_t, region_t>::dualBarrie
 }
 
 template<class System_t, class State_t, class Vector_t, class region_t>
-Vector_t Rotorcraft::Triangle<System_t, State_t, Vector_t, region_t>::dualBarrierSampling_vect(Vector_t* state1, Vector_t* state2, Vector_t* statePrev, std::vector<Vector_t>& gVect)
+Vector_t Rotorcraft::Triangle<System_t, State_t, Vector_t, region_t>::dualBarrierSampling_vect(Vector_t* state1, Vector_t* state2, Vector_t* statePrev, std::vector<Vector_t>& gVect, int numIterations)
 {
   bool solFound = false;
   bool orSolFound = false;
@@ -500,7 +500,7 @@ Vector_t Rotorcraft::Triangle<System_t, State_t, Vector_t, region_t>::dualBarrie
   double cost = DBL_MAX;
   double angleLower = g_camPitch+g_camAngleVertical/2.0;
   double angleUpper = g_camPitch-g_camAngleVertical/2.0;
-  int maxPW = 12;
+  int maxPW = numIterations;
   double psiInc = 2*M_PI/maxPW;
   Vector3f m = (this->x1+this->x2+this->x3)/3;
   int obsCount = 0;

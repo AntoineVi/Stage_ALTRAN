@@ -611,7 +611,7 @@ bool plan(koptplanner::inspection::Request	&req, koptplanner::inspection::Respon
 #endif
 			}
 			/* sample viewpoint */
-			StateVector VPtmp = tri[i]->dualBarrierSampling_vect(s1,s2,&VP[i],gVect);
+			StateVector VPtmp = tri[i]->dualBarrierSampling_vect(s1,s2,&VP[i],gVect, req.numIterations);
 			if(koptPlannerIteration == 0 || vp_tol<(VPtmp - VP[i]).norm())
 			{
 				VP[i] = VPtmp;
