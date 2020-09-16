@@ -1,9 +1,18 @@
 <launch>
 	<rosparam file="$(find koptplanner)/avion.yaml"/>
+	<arg name="use_RVIZ" default="1"/>
+	<arg name="use_evalPath" default="0"/>
+	<arg name="numExecutions" default="10"/>
+	
+	<node 	name="rviz" pkg="rviz" type="rviz" if="$(arg use_RVIZ)"/>
 
-    <node name="Inspection_Planner" pkg="koptplanner" type="avoidObstacle" clear_params="true" output="screen"/>
-    
-    <node name="rviz" pkg="rviz" type="rviz"/>
+	<node 	name="evalPath" pkg="koptplanner" type="evalPath" 
+			clear_params="true" output="screen" args="$(arg numExecutions) $(arg use_RVIZ)" 
+			if="$(arg use_evalPath)"/>
+	
+    <node 	name="Inspection_Planner" pkg="koptplanner" type="avoidObstacle" 
+    		clear_params="true"  output="screen" args="$(arg use_RVIZ) $(arg use_evalPath)" 
+    		launch-prefix="bash -c 'sleep 3; $0 $@'"/>
     
 </launch>
 

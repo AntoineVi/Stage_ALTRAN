@@ -4,26 +4,32 @@ Antoine:
 ---------------------------
 To generate databases of viewpoints
 
+To launch the ROS service
 Shell #1
 ```sh
-roslaunch koptplanner viewpoints_generator.launch
+roslaunch koptplanner viewpoints_generator.launch use_RVIZ:=0
 ```
 
-As koptplanner, to run the client
-
+As koptplanner, to launch the client
 Shell #2
 ```sh
-rosrun request avion_VP_generator <nb max of viewpoint configurations>
+rosrun request avion_VP_generator <minDist> <nb max of viewpoint configurations>
 ```
 
-To run with existing viewpoints databases:
+To launch the obstacle avoidance (avoidObstacle)
+
+3 parameters: 
+1.	use_RVIZ: 0/1 => to launch or not RVIZ to visualize the execution (default=1)
+2. 	use_evalPath: 0/1 => to launch or not the node to generate random obstacles for execute avoidObstacle several times (default=0)
+3.	numExecutions: integer => define the number of obstacles/executions of avoidObstacle if use_evalPath=1 (default=10)
+
+To add an obstacle to RVIZ, you have to click on "Publish Point" on the RVIZ toolbar if use_evalPath=0.
 
 Shell #1
 ```sh
-roslaunch koptplanner avoidObstacle.launch
-```
-To add an obstacle to RVIZ, you have to click on "Publish Point" on the RVIZ toolbar.
+roslaunch koptplanner avoidObstacle.launch use_RVIZ:=1 use_evalPath:=1 numExecutions:=10
 
+If eval_path=1, the results of the executionss are in koptplanner/data/results.txt.
 
 **Beta version**
 

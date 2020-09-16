@@ -399,6 +399,10 @@ add_executable(avoidObstacle
   include/LKH-2.0.7/SRC/WriteTour.c
 )
 
+add_executable(evalPath
+  src/evalPath.cpp
+)
+
 ## Specify libraries to link a library or executable target against
 target_link_libraries(plan
   ${optec_LIBRARIES}
@@ -411,6 +415,11 @@ target_link_libraries(viewpoints_generator
 )
 
 target_link_libraries(avoidObstacle
+  ${optec_LIBRARIES}
+  ${catkin_LIBRARIES}
+)
+
+target_link_libraries(evalPath
   ${optec_LIBRARIES}
   ${catkin_LIBRARIES}
 )
