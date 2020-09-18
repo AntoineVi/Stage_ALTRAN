@@ -169,10 +169,10 @@ int main(int argc, char **argv)
 	
 	// Problem setup with the last calculated path from tour.txt file
 	sleep_time = 0.01;
-	obsBoxSize = 20;
+	obsBoxSize = 5;
 	pkgPath = ros::package::getPath("koptplanner");
 	g_security_distance = 5.0;
-	octreeSize = 32;
+	octreeSize = 64;
 	octree = new Octree<std::vector<int>>(octreeSize);
 	
 	if (argc == 3) {
@@ -856,13 +856,13 @@ int planForHiddenTrangles() {
 			res_g->inspectionPath.poses.clear();
 		}
 		path = tmpPath;
-		std::vector<geometry_msgs::PoseStamped>().swap(tmpPath);
-		std::vector<std::pair<int,int>>().swap(indicesPathKO);
+		//std::vector<geometry_msgs::PoseStamped>().swap(tmpPath);
+		//std::vector<std::pair<int,int>>().swap(indicesPathKO);
 	}
 	else
 		ROS_INFO("Not need to change the inspection path!");
 		
-	if(modifiedPath) {
+	if(modifiedPath && !use_evalPath) {
 		savePathToFile();
 	}
 		
@@ -1002,8 +1002,8 @@ void changeInspectionPath(int firstIDPathKO, std::vector<geometry_msgs::PoseStam
 			tmpPath[firstIDPathKO+i].header.seq = VPnewIDs[i];
 	}
 	
-	std::vector<int>().swap(VPnewIDs);
-	std::vector<geometry_msgs::PoseStamped>().swap(waypoints);
+	//std::vector<int>().swap(VPnewIDs);
+	//std::vector<geometry_msgs::PoseStamped>().swap(waypoints);
 }
 
 void cleanVariables() {

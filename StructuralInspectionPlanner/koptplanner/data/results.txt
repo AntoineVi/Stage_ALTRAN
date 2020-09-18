@@ -1,9 +1,9 @@
-Executions: 201
-Average execution time: 811
-OK: 57
-ERROR #1 No collision free configuration: 143
+Executions: 500
+Average execution time: 83
+OK: 482
+ERROR #1 No collision free configuration: 15
 ERROR #2 Path KO: 0
-ERROR #3 Start point KO: 1
+ERROR #3 Start point KO: 4
 ERROR #4 Waypoint KO: 0
 ERROR #5 Miss VP: 0
 ERROR #6 Corrupted VP: 0

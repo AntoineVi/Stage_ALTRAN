@@ -64,7 +64,7 @@ int main(int argc, char **argv)
 	marker_sub = n.subscribe("visualization_marker", 1, getPath);
 	stl_sub = n.subscribe("stl_mesh", 10000, getSTL);	
 
-	obsBoxSize = 20;
+	obsBoxSize = 5;
 	pkgPath = ros::package::getPath("koptplanner");
 	g_security_distance = 5.0;
 	time_EXEC = 0;
@@ -132,7 +132,7 @@ int main(int argc, char **argv)
 }
 
 void publishObstacle() {
-	ROS_INFO("Iter: %d", cptExec+1);
+	ROS_INFO("Iter: %d", cptExec);
 
 	int idVPKO = rand() % (mesh.size()-1) + 1;
 	
@@ -173,8 +173,7 @@ void getResult(const std_msgs::Int32::ConstPtr& res) {
 	
 	time_EXEC = 0;
 	results[res->data]++;
-	cptExec++;
-
+	
 	file.open(pkgPath+"/data/results.txt", std::ios::out | std::ios::trunc);
 	file << "Executions: " << cptExec << "\n";
 	if(results[0] > 0) // Avoid division by 0
@@ -192,6 +191,7 @@ void getResult(const std_msgs::Int32::ConstPtr& res) {
 
 	file.close();
 	nextObstacle = true;
+	cptExec++;
 	
 	if(RVIZ_ON)
 		ros::Duration(5).sleep();
@@ -232,6 +232,7 @@ void checkPath() {
 		else if(it_path->header.seq <= mesh.size()) {
 			ROS_ERROR("Multiples configurations with the same ID: %d!", it_path->header.seq);
 			results[7]++;
+			results[0]--;
 			ros::shutdown();
 			return;
 		}
@@ -261,6 +262,7 @@ void checkPath() {
 				if(!OK) {
 					ROS_ERROR("Viewpoint %d corrupted", it_path->header.seq);
 					results[6]++;
+					results[0]--;
 				}
 				OK = false;
 		}
@@ -291,14 +293,19 @@ void checkPath() {
 		if(!isVisibilityBoxOK(xs, ys, zs)) {
 			ROS_ERROR("VP %d KO!", it_path->header.seq);
 			results[2]++;
+			results[0]--;
 			return;
 		}
 		
 	}
 	
 	if(!allVPsID.empty()) {
-		ROS_ERROR("Missing VPs!");
+		for(int i=0; i<allVPsID.size(); i++) {
+			if(allVPsID[i] > mesh.size())
+				ROS_ERROR("Missing VP: %d", allVPsID[i]);
+		}
 		results[5]++;
+		results[0]--;
 	}
 }
 

@@ -48,7 +48,7 @@ int main(int argc, char **argv)
   koptplanner::inspection srv;
   srv.request.incidenceAngle = M_PI/6.0;
   srv.request.minDist = std::stof(argv[1]);
-  srv.request.maxDist = 500.0;
+  srv.request.maxDist = 1000.0;
   ROS_INFO("minDist:%f, maxDist:%f, incidenceAngle:%f", srv.request.minDist, srv.request.maxDist, srv.request.incidenceAngle);
   srv.request.numIterations = std::stof(argv[2]);
   ROS_INFO("Iterations:%d", srv.request.numIterations);

@@ -6,7 +6,7 @@ Space center:		(0, 0, 0)
 Space size:		(1000, 1000, 1000)
 Starting point:		(0, 0, 100)
 Angle of incidence:	0.523599rad
-Range:			(30, 500)m
+Range:			(50, 1000)m
 Number of iterations:	50
 Linear speed:		0.25m/s
 Yaw rate:		0.5rad/s
