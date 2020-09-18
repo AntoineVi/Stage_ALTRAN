@@ -294,6 +294,8 @@ void checkPath() {
 			ROS_ERROR("VP %d KO!", it_path->header.seq);
 			results[2]++;
 			results[0]--;
+			// TODO Comment
+			//ros::shutdown();
 			return;
 		}
 		

@@ -1,6 +1,6 @@
-NAME : inspection.1069.tour
-COMMENT : Length = 1069
-COMMENT : Found by LKH [Keld Helsgaun] Fri Sep 18 10:50:17 2020
+NAME : inspection.297.tour
+COMMENT : Length = 297
+COMMENT : Found by LKH [Keld Helsgaun] Fri Sep 18 15:48:27 2020
 TYPE : TOUR
 DIMENSION : 3
 TOUR_SECTION

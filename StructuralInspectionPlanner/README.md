@@ -27,6 +27,11 @@ To launch the obstacle avoidance (avoidObstacle)
 2. 	use_evalPath: 0/1 => to launch or not the node to generate random obstacles for execute avoidObstacle several times (default=0)
 3.	numExecutions: integer => define the number of obstacles/executions of avoidObstacle if use_evalPath=1 (default=10)
 
+variables obsBoxSize = size of the obstacle (avoidObstacle.cpp:172 and evalPath.cpp:67)
+g_security_distance = security distance from the center of the obstacle to the viewpoint (avoidObstacle.cpp:174 and evalPath.cpp:69)
+
+ obsBoxSize and g_security_distance should be the same in both files.
+
 To add an obstacle to RVIZ, you have to click on "Publish Point" on the RVIZ toolbar if use_evalPath=0.
 
 Shell #1

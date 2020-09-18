@@ -862,7 +862,7 @@ int planForHiddenTrangles() {
 	else
 		ROS_INFO("Not need to change the inspection path!");
 		
-	if(modifiedPath && !use_evalPath) {
+	if(modifiedPath && !USE_evalPath) {
 		savePathToFile();
 	}
 		
