@@ -295,7 +295,7 @@ void checkPath() {
 			results[2]++;
 			results[0]--;
 			// TODO Comment
-			//ros::shutdown();
+			ros::shutdown();
 			return;
 		}
 		
